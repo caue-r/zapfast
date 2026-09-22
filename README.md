@@ -54,7 +54,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   does not retry it; send it again yourself.
 - **WhatsApp formatting.** Bold, italic, strikethrough, code, lists, quotes,
   mentions, and link previews are supported. Links are clickable. Hebrew and
-  Arabic RTL paragraphs keep logical word order by reordering font runs; this
+  Arabic RTL paragraphs keep logical word order by reordering font runs,
+  including shaped Arabic ligatures in messages and reply previews. This
   is not a full Unicode Bidirectional Algorithm. Emoji use the bundled Noto
   Color Emoji on macOS and Windows. On Linux, ZapFast prefers an installed
   Noto Color Emoji and falls back to the bundled copy. Emoji-only messages
