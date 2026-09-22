@@ -133,13 +133,17 @@ async fn download_attachment(
         )
         .await;
     match result {
-        Ok(_) => match publish_attachment(&temporary, path).await {
-            Ok(()) => Ok(path.to_path_buf()),
-            Err(error) => {
-                let _ = tokio::fs::remove_file(&temporary).await;
-                Err(error.to_string())
+        Ok(writer) => {
+            // Close the verified file before publishing it, including on Windows.
+            drop(writer);
+            match publish_attachment(&temporary, path).await {
+                Ok(()) => Ok(path.to_path_buf()),
+                Err(error) => {
+                    let _ = tokio::fs::remove_file(&temporary).await;
+                    Err(error.to_string())
+                }
             }
-        },
+        }
         Err(error) => {
             let _ = tokio::fs::remove_file(&temporary).await;
             let error = error.to_string();
