@@ -4935,16 +4935,31 @@ fn sanitize(id: &str) -> String {
         .collect()
 }
 
-fn extension_for(mime: &str, file_name: Option<&str>) -> String {
-    if let Some(extension) = file_name
-        .and_then(|name| Path::new(name).extension())
-        .and_then(|extension| extension.to_str())
-        .filter(|extension| !extension.is_empty() && extension.len() <= 8)
+/// Reject the whole extension instead of repairing path syntax or truncating it.
+/// This alphabet is safe on both Unix and Windows, regardless of the host OS.
+fn safe_extension(extension: &str) -> String {
+    if extension.is_empty()
+        || extension.len() > 16
+        || !extension
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
     {
-        return extension.to_ascii_lowercase();
+        return "bin".to_owned();
     }
-    let mime = mime.split(';').next().unwrap_or(mime).trim();
-    match mime {
+    extension.to_ascii_lowercase()
+}
+
+fn extension_for(mime: &str, file_name: Option<&str>) -> String {
+    // Inspect the complete suffix, without host-specific Path parsing that could
+    // discard separators within it. The rest of the name is sanitized separately.
+    if let Some(extension) = file_name
+        .and_then(|name| name.rsplit_once('.'))
+        .map(|(_, extension)| extension)
+    {
+        return safe_extension(extension);
+    }
+    let mime = mime.split(';').next().unwrap_or(mime);
+    safe_extension(match mime {
         "image/jpeg" => "jpg",
         "image/png" => "png",
         "image/webp" => "webp",
@@ -4958,12 +4973,9 @@ fn extension_for(mime: &str, file_name: Option<&str>) -> String {
         "audio/wav" => "wav",
         "application/pdf" => "pdf",
         "text/plain" => "txt",
-        _ => mime.rsplit('/').next().unwrap_or("bin"),
-    }
-    .chars()
-    .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
-    .take(16)
-    .collect::<String>()
+        // Split at the first slash so extra slashes remain and are rejected.
+        _ => mime.split_once('/').map_or("bin", |(_, subtype)| subtype),
+    })
 }
 
 fn media_path(dir: &Path, chat: &str, id: &str, mime: &str, file_name: Option<&str>) -> PathBuf {
@@ -4972,6 +4984,9 @@ fn media_path(dir: &Path, chat: &str, id: &str, mime: &str, file_name: Option<&s
         Some(name) => format!("{}-{}", sanitize(id), sanitize(name)),
         None => format!("{}-{}", sanitize(chat), sanitize(id)),
     };
+    // The stem contains only ASCII alphanumerics, '_' and '-', and the validated
+    // extension only alphanumerics and '-'. The single literal dot cannot create
+    // a path component, drive prefix or alternate data stream on either OS.
     dir.join(format!("{stem}.{extension}"))
 }
 
@@ -6214,6 +6229,166 @@ mod tests {
         );
         assert_eq!(extension_for("audio/ogg; codecs=opus", None), "ogg");
         assert_eq!(extension_for("application/x-unknown", None), "x-unknown");
+    }
+
+    #[test]
+    fn media_extensions_reject_path_syntax_and_invalid_values() {
+        for extension in [
+            "",
+            "../",
+            "../outside",
+            r"..\",
+            r"..\outside",
+            "/tmp/outside",
+            r"\outside",
+            "C:outside",
+            "C:/outside",
+            r"C:\outside",
+            r"\\server\share\outside",
+            "//server/share/outside",
+            "jpg:stream",
+            "tar.gz",
+            "..jpg",
+            ".",
+            "..",
+            " jpg",
+            "jpg ",
+            "j pg",
+            "jpg\t",
+            "jpg\n",
+            "jp\0g",
+            "pñg",
+            "ｐｎｇ",
+            "jpg_",
+            "12345678901234567",
+        ] {
+            assert_eq!(safe_extension(extension), "bin", "{extension:?}");
+            let mime = format!("application/{extension}");
+            assert_eq!(extension_for(&mime, None), "bin", "{mime:?}");
+        }
+        for mime in ["", "png", "application", "application/"] {
+            assert_eq!(extension_for(mime, None), "bin", "{mime:?}");
+        }
+        for name in [
+            "file.",
+            "file./outside",
+            r"file.\outside",
+            r"file.\..\outside",
+            "file.C:outside",
+            "file.C:/outside",
+            r"file.C:\outside",
+            r"file.\\host\share",
+            "file.jpg:stream",
+            "file.jpg ",
+            "file.jp g",
+            "file.jp\tg",
+            "file.jp\ng",
+            "file.jp\0g",
+            "file.pñg",
+            "file.jpg_",
+            "file.12345678901234567",
+            "file..",
+        ] {
+            // Invalid filename suffixes must not fall through to a valid MIME.
+            assert_eq!(extension_for("image/jpeg", Some(name)), "bin", "{name:?}");
+        }
+    }
+
+    #[test]
+    fn media_extensions_preserve_common_formats_and_length_boundary() {
+        for extension in [
+            "jpg",
+            "jpeg",
+            "png",
+            "webp",
+            "gif",
+            "mp4",
+            "3gp",
+            "ogg",
+            "opus",
+            "mp3",
+            "m4a",
+            "aac",
+            "wav",
+            "pdf",
+            "txt",
+            "docx",
+            "xlsx",
+            "zip",
+            "x-unknown",
+            "1234567890123456",
+        ] {
+            let uppercase = extension.to_ascii_uppercase();
+            assert_eq!(safe_extension(&uppercase), extension);
+            assert_eq!(
+                extension_for(&format!("application/{uppercase}"), None),
+                extension
+            );
+            assert_eq!(
+                extension_for(
+                    "application/octet-stream",
+                    Some(&format!("file.{uppercase}"))
+                ),
+                extension
+            );
+        }
+        // Multiple dots in a document's name are fine; only its last suffix is used.
+        assert_eq!(
+            extension_for("application/gzip", Some("archive.tar.gz")),
+            "gz"
+        );
+        assert_eq!(extension_for("image/jpeg", Some("no-extension")), "jpg");
+    }
+
+    #[test]
+    fn media_paths_and_staging_stay_direct_children_for_hostile_metadata() {
+        let dir = Path::new("cache").join("media");
+        for input in [
+            "../",
+            "../outside",
+            r"..\",
+            r"..\outside",
+            "/tmp/outside",
+            r"C:\outside",
+            "C:outside",
+            r"\\server\share\outside",
+            "jpg:stream",
+            "tar.gz",
+            "",
+            "12345678901234567",
+            "pñg",
+            "jpg ",
+            r"photo.x\..\..\outside",
+            "../photo.jpg",
+            r"..\photo.jpg",
+        ] {
+            for name in [None, Some(input)] {
+                let path = media_path(&dir, input, input, &format!("image/{input}"), name);
+                for candidate in [path.clone(), temporary_attachment_path(&path)] {
+                    assert_eq!(candidate.parent(), Some(dir.as_path()), "{candidate:?}");
+                    let relative = candidate.strip_prefix(&dir).unwrap();
+                    assert_eq!(relative.components().count(), 1);
+                    // Enforce Windows safety even when these tests run on Unix.
+                    let filename = relative.to_str().unwrap();
+                    assert!(
+                        filename.bytes().all(|byte| byte.is_ascii_alphanumeric()
+                            || matches!(byte, b'_' | b'-' | b'.')),
+                        "{filename:?}"
+                    );
+                    assert!(!filename.contains(".."));
+                    assert!(!filename.ends_with('.'));
+                }
+                assert_eq!(
+                    path.file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .matches('.')
+                        .count(),
+                    1
+                );
+            }
+        }
     }
 
     #[test]

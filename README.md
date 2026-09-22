@@ -131,6 +131,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   If an attachment has expired, ZapFast asks your
   phone to upload it again. Downloads stop after two minutes with an inline
   retry error if they cannot finish; the menu disables Download while one is running.
+  Cached attachment filenames use extensions of at most 16 ASCII letters, digits,
+  or hyphens; invalid or empty extensions are saved as `.bin`.
 - **Polls.** Use the checklist button beside the paperclip to create a poll with
   2–12 answers. Turn off **Allow multiple answers** for a single-choice poll.
   Click an answer in a poll to vote; click a selected answer again to remove
