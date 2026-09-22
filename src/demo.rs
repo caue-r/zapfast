@@ -2468,6 +2468,33 @@ mod tests {
     }
 
     #[test]
+    fn toast_text_and_buttons_share_a_vertical_center() {
+        for message in [
+            "This message is not stored on this computer",
+            "A longer synthetic error with enough words to wrap onto several lines without pushing the buttons out of alignment 🙂",
+        ] {
+            let mut app = app();
+            app.toast_error(message);
+            let ctx = egui::Context::default();
+            app.attach(&ctx);
+            for _ in 0..3 {
+                render(&mut app, &ctx);
+            }
+            let id = crate::ui::toast_close_id(0);
+            let (text, close) = ctx.data(|data| {
+                (
+                    data.get_temp::<egui::Rect>(id.with("text")).unwrap(),
+                    data.get_temp::<egui::Rect>(id).unwrap(),
+                )
+            });
+            assert!(
+                (text.center().y - close.center().y).abs() < 1.0,
+                "text {text:?}, close {close:?}"
+            );
+        }
+    }
+
+    #[test]
     fn bubble_hit_rects_follow_the_layout() {
         // Ensure the right-click rect follows messages after initial scrolling.
         let mut app = app();

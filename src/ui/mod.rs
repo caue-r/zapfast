@@ -363,8 +363,17 @@ fn toasts(app: &mut App, ctx: &egui::Context) {
                             (ctx.content_rect().width() - 150.0).clamp(80.0, 360.0),
                         );
                         let buttons = if error { 2.0 * 26.0 + 12.0 } else { 0.0 };
+                        let text = widgets::line(
+                            ui,
+                            &toast.message,
+                            font,
+                            palette.text,
+                            laid.size().x + 1.0,
+                            usize::MAX,
+                        );
                         ui.set_width(laid.size().x + 26.0 + buttons);
                         ui.horizontal(|ui| {
+                            ui.set_min_height(text.size().y.max(26.0));
                             let (icon, color) = if error {
                                 (Icon::CircleAlert, palette.danger)
                             } else {
@@ -372,22 +381,15 @@ fn toasts(app: &mut App, ctx: &egui::Context) {
                             };
                             theme::icon(ui, icon, 16.0, color);
                             // Keep the text clear of the buttons beside it.
-                            ui.allocate_ui(vec2(laid.size().x + 1.0, 0.0), |ui| {
-                                let text = widgets::line(
-                                    ui,
-                                    &toast.message,
-                                    font,
-                                    palette.text,
-                                    ui.available_width(),
-                                    usize::MAX,
-                                );
-                                let (rect, _) =
-                                    ui.allocate_exact_size(text.size(), egui::Sense::hover());
-                                text.paint(ui, rect.min, palette.text);
+                            let (rect, _) =
+                                ui.allocate_exact_size(text.size(), egui::Sense::hover());
+                            text.paint(ui, rect.min, palette.text);
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(toast_close_id(index).with("text"), rect);
                             });
                             if error {
                                 ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Min),
+                                    egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
                                         let close = theme::icon_button(
                                             ui,
