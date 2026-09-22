@@ -33,6 +33,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   The filters stay on one row and scroll horizontally in narrow sidebars.
   Unnamed groups use a shared participant summary for their title and subtitle;
   repeated first names appear as `Andrea ×3`, with your own entry shown as `You`.
+  Incomplete group metadata preserves known names and retries with backoff;
+  an empty cached subject remains eligible for recovery.
   Typing indicators show other participants, excluding your own linked devices.
   Newsletter channels are read-only; publishing channel posts is not supported.
 - **Read state across devices.** Reading a chat syncs its unread badge with

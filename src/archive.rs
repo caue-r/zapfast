@@ -313,6 +313,9 @@ impl Archive {
         participants: &[String],
         read_only: bool,
     ) -> Result<()> {
+        // Incomplete metadata must not erase a subject learned from history.
+        // Keep unresolved subjects eligible for another metadata request.
+        let name = name.filter(|name| !name.trim().is_empty());
         self.connection.execute(
             "UPDATE chats SET name = COALESCE(?2, name), participants = ?3, read_only = ?4,
                 group_subject_known = CASE WHEN ?2 IS NOT NULL THEN 1 ELSE group_subject_known END
@@ -1569,7 +1572,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn empty_subjects_replace_placeholders_and_real_group_subjects_remain_distinct() {
+    fn empty_metadata_preserves_group_titles_and_keeps_placeholders_unresolved() {
         let archive = Archive::in_memory().unwrap();
         let id = "fixture@g.us";
         archive.ensure_chat(id, "Group").unwrap();
@@ -1578,8 +1581,11 @@ pub(crate) mod tests {
             .set_group_info(id, Some(""), &["1@s.whatsapp.net".into()], false)
             .unwrap();
         let row = archive.chat(id).unwrap().unwrap();
-        assert!(row.name.is_empty());
-        assert!(row.group_subject_known);
+        assert_eq!(row.name, "Group");
+        assert!(!row.group_subject_known);
+        archive.rename_chat(id, "Weekend plans").unwrap();
+        archive.set_group_info(id, Some("  "), &[], false).unwrap();
+        assert_eq!(archive.chat(id).unwrap().unwrap().name, "Weekend plans");
         archive.rename_chat(id, "Group").unwrap();
         let row = archive.chat(id).unwrap().unwrap();
         assert_eq!(row.name, "Group");
