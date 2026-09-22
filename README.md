@@ -148,7 +148,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **Presence.** See online, last-seen, and typing status, and send your typing
   status.
 - **Idle rendering.** History-sync progress updates when data arrives. Animated
-  stickers and GIFs play only while their message or picker tile is visible.
+  stickers and GIFs show a still first frame and play while hovered in the
+  focused window, keeping idle conversations from continuously repainting.
 - **Sync recovery.** A conflicting app-state collection is recovered through
   whatsapp-rust, including requesting a fresh snapshot from the paired phone
   when validation fails. Private read-state updates run one at a time. Failures
