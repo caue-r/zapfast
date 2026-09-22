@@ -683,16 +683,20 @@ impl Worker {
                 }
                 if removed.existed {
                     if self.archive.chat(chat).ok().flatten().is_none() {
+                        log::info!("chat removal: deleted cached chat");
                         self.emit(Event::ChatRemoved {
                             chat: chat.to_owned(),
                         });
                     } else {
+                        log::info!("chat removal: retained messages newer than deletion boundary");
                         self.emit(Event::ChatCleared {
                             chat: chat.to_owned(),
                             through,
                         });
                         self.emit_chat(chat);
                     }
+                } else {
+                    log::info!("chat removal: no matching cached chat");
                 }
             }
             Err(_error) => log::warn!("could not delete a chat"),
@@ -1085,6 +1089,22 @@ impl Worker {
             Ok(jid) => self.canonical(&jid),
             Err(_) => id.to_owned(),
         }
+    }
+
+    /// App-state mutations may use a privacy id before a message teaches the UI
+    /// its mapping. Consult the protocol library's persisted mapping as well.
+    async fn canonical_sync_chat(&mut self, jid: &Jid) -> String {
+        if jid.is_lid()
+            && !self.lid_to_pn.contains_key(jid.user_base())
+            && let Some(client) = self.client.clone()
+        {
+            match client.get_lid_pn_entry(jid).await {
+                Ok(Some(entry)) => self.learn_lid(&entry.lid, &entry.phone_number),
+                Ok(None) => log::info!("chat removal: privacy mapping not yet available"),
+                Err(_) => log::warn!("chat removal: could not resolve privacy mapping"),
+            }
+        }
+        self.canonical(jid)
     }
 
     fn jid_of(id: &str) -> Option<Jid> {
@@ -1581,7 +1601,8 @@ impl Worker {
                 self.emit_chat(&chat);
             }
             E::DeleteChatUpdate(update) => {
-                let chat = self.canonical(&update.jid);
+                log::info!("chat removal: received delete update");
+                let chat = self.canonical_sync_chat(&update.jid).await;
                 let through = removal_point(
                     update
                         .action
@@ -1593,7 +1614,8 @@ impl Worker {
                 self.remove_chat(&chat, through, update.delete_media);
             }
             E::ClearChatUpdate(update) => {
-                let chat = self.canonical(&update.jid);
+                log::info!("chat removal: received clear update");
+                let chat = self.canonical_sync_chat(&update.jid).await;
                 let through = removal_point(
                     update
                         .action
@@ -4894,7 +4916,9 @@ fn fallback_name(id: &str) -> String {
 /// Where a deleted or cleared chat ends: the last message the deleting device
 /// knew about, or the moment of the action when it sent no message range.
 fn removal_point(last_message: Option<i64>, action: i64) -> i64 {
-    last_message.map_or(action, seconds)
+    last_message
+        .filter(|timestamp| *timestamp > 0)
+        .map_or(action, seconds)
 }
 
 fn seconds(timestamp: i64) -> i64 {
@@ -7757,6 +7781,71 @@ mod chat_removal_tests {
     use crate::model::{Content, Delivery};
 
     const CHAT: &str = "4915700000001@s.whatsapp.net";
+
+    #[tokio::test]
+    async fn deletion_resolves_a_mapping_known_only_to_the_protocol_library() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = whatsapp_rust::store::SqliteStore::new(
+            &directory.path().join("fixture.db").to_string_lossy(),
+        )
+        .await
+        .unwrap();
+        // Build only: never run or spawn this bot, so the fixture stays offline.
+        let bot = Bot::builder().with_backend(store).build().await.unwrap();
+        let client = bot.client();
+        client
+            .add_lid_pn_mapping(
+                "100000000001",
+                "4915700000001",
+                whatsapp_rust::wacore::types::lid_pn::LearningSource::Usync,
+            )
+            .await
+            .unwrap();
+        let (mut worker, _, _, _) = receipt_tests::worker();
+        worker.client = Some(client);
+        assert!(worker.lid_to_pn.is_empty());
+        assert_eq!(
+            worker
+                .canonical_sync_chat(&"100000000001@lid".parse().unwrap())
+                .await,
+            CHAT
+        );
+        assert_eq!(
+            worker.lid_to_pn.get("100000000001").map(String::as_str),
+            Some("4915700000001")
+        );
+    }
+
+    #[tokio::test]
+    async fn live_deletion_with_an_empty_range_removes_the_cached_chat() {
+        for timestamp in [None, Some(0), Some(200), Some(200_000_000_000)] {
+            let (mut worker, events, _, _) = receipt_tests::worker();
+            worker.apply_history(history(CHAT, &[100, 200]), true);
+            while events.try_recv().is_ok() {}
+            worker
+                .handle_wa_event(Arc::new(wa_events::Event::DeleteChatUpdate(
+                    wa_events::DeleteChatUpdate::builder()
+                        .jid(CHAT.parse().unwrap())
+                        .delete_media(false)
+                        .timestamp((std::time::UNIX_EPOCH + Duration::from_secs(300)).into())
+                        .action(Box::new(wa::sync_action_value::DeleteChatAction {
+                            message_range: Some(wa::sync_action_value::SyncActionMessageRange {
+                                last_message_timestamp: timestamp,
+                                ..Default::default()
+                            })
+                            .into(),
+                        }))
+                        .from_full_sync(false)
+                        .build(),
+                )))
+                .await;
+            assert!(worker.archive.chat(CHAT).unwrap().is_none());
+            assert!(
+                std::iter::from_fn(|| events.try_recv().ok())
+                    .any(|event| matches!(event, Event::ChatRemoved { chat } if chat == CHAT))
+            );
+        }
+    }
 
     /// A history chunk holding one chat with a message at each timestamp.
     fn history(chat: &str, timestamps: &[i64]) -> ParsedHistory {
