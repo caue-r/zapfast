@@ -128,7 +128,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   their default desktop apps. Profile pictures and downloaded images support
   Windows drive paths and filenames with spaces or non-ASCII characters.
   If an attachment has expired, ZapFast asks your
-  phone to upload it again.
+  phone to upload it again. Downloads stop after two minutes with an inline
+  retry error if they cannot finish; the menu disables Download while one is running.
 - **Polls.** Use the checklist button beside the paperclip to create a poll with
   2–12 answers. Turn off **Allow multiple answers** for a single-choice poll.
   Click an answer in a poll to vote; click a selected answer again to remove

@@ -2273,6 +2273,9 @@ impl App {
                     .and_then(|conversation| conversation.message_mut(&message))
                     .and_then(|message| message.content.media_mut())
                 {
+                    if matches!(media.state, MediaState::Downloading) {
+                        return;
+                    }
                     media.state = MediaState::Downloading;
                 }
                 self.backend.send(Command::Download { chat, message });
@@ -4019,6 +4022,67 @@ mod tests {
             forwarded: false,
             thumbnail: None,
         }
+    }
+
+    #[test]
+    fn repeated_download_clicks_do_not_queue_more_requests() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let chat = "fixture@s.whatsapp.net";
+        let mut attachment = message(chat, "picture", 1);
+        attachment.content = Content::Image {
+            caption: None,
+            media: Media {
+                mime: "image/jpeg".into(),
+                size: 100,
+                width: None,
+                height: None,
+                path: None,
+                state: MediaState::Idle,
+            },
+        };
+        app.conversations
+            .entry(chat.into())
+            .or_default()
+            .merge(vec![attachment], false);
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            app.apply(
+                Action::Download {
+                    chat: chat.into(),
+                    message: "picture".into(),
+                },
+                &ctx,
+            );
+        }
+        assert!(matches!(commands.try_recv(), Ok(Command::Download { .. })));
+        assert!(commands.try_recv().is_err());
+        let (backend, events) = Backend::detached();
+        app.backend = backend;
+        events
+            .send(Event::Media {
+                chat: chat.into(),
+                message: "picture".into(),
+                result: Err("Download timed out".into()),
+            })
+            .unwrap();
+        app.handle_events();
+        assert!(matches!(
+            app.media_of(chat, "picture").map(|media| &media.state),
+            Some(MediaState::Failed(_))
+        ));
+        assert!(app.toasts.is_empty());
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        app.apply(
+            Action::Download {
+                chat: chat.into(),
+                message: "picture".into(),
+            },
+            &ctx,
+        );
+        assert!(matches!(commands.try_recv(), Ok(Command::Download { .. })));
     }
 
     #[test]

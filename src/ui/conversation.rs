@@ -2529,7 +2529,18 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
                 }
             }
             None => {
-                if widgets::menu_item(ui, &palette, Some(Icon::Download), "Download") {
+                let downloading = matches!(media.state, MediaState::Downloading);
+                if widgets::menu_item_enabled(
+                    ui,
+                    &palette,
+                    Some(Icon::Download),
+                    if downloading {
+                        "Downloading…"
+                    } else {
+                        "Download"
+                    },
+                    !downloading,
+                ) {
                     actions.push(Action::Download {
                         chat: chat.clone(),
                         message: message.id.clone(),

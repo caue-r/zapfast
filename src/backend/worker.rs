@@ -62,6 +62,16 @@ const THUMBNAIL_SIDE: u32 = 96;
 /// Sticker download batch size for the picker.
 const STICKER_FETCH_LIMIT: usize = 40;
 const ATTACHMENT_LIMIT_ERROR: &str = "This attachment is larger than the 64 MiB download limit";
+const ATTACHMENT_TIMEOUT: Duration = Duration::from_secs(120);
+
+async fn with_attachment_deadline<T>(
+    duration: Duration,
+    operation: impl std::future::Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    tokio::time::timeout(duration, operation)
+        .await
+        .unwrap_or_else(|_| Err("Download timed out".to_owned()))
+}
 
 /// A streaming download sink that refuses to grow beyond the attachment limit.
 ///
@@ -3933,43 +3943,47 @@ impl Worker {
         let commands = self.commands.clone();
         tokio::spawn(async move {
             let path = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
-            let result = match download_attachment(&client, &*downloadable, &dir, &path).await {
-                Ok(path) => Ok(path),
-                Err(error) => {
-                    let text = error.to_string();
-                    let expired = ["403", "404", "410"].iter().any(|code| text.contains(code));
-                    match (&jid, expired && !media_key.is_empty()) {
-                        (Some(jid), true) => {
-                            // Ask the phone to re-upload expired media, then retry once.
-                            let request = MediaReuploadRequest {
-                                msg_id: &id,
-                                chat_jid: jid,
-                                media_key: &media_key,
-                                is_from_me,
-                                participant: participant.as_ref(),
-                            };
-                            match client.media_reupload().request(&request).await {
-                                Ok(MediaRetryResult::Success { direct_path }) => {
-                                    match refreshed(direct_path) {
-                                        Some(again) => {
-                                            download_attachment(&client, &*again, &dir, &path).await
+            let result = with_attachment_deadline(ATTACHMENT_TIMEOUT, async {
+                match download_attachment(&client, &*downloadable, &dir, &path).await {
+                    Ok(path) => Ok(path),
+                    Err(error) => {
+                        let text = error.to_string();
+                        let expired = ["403", "404", "410"].iter().any(|code| text.contains(code));
+                        match (&jid, expired && !media_key.is_empty()) {
+                            (Some(jid), true) => {
+                                // Ask the phone to re-upload expired media, then retry once.
+                                let request = MediaReuploadRequest {
+                                    msg_id: &id,
+                                    chat_jid: jid,
+                                    media_key: &media_key,
+                                    is_from_me,
+                                    participant: participant.as_ref(),
+                                };
+                                match client.media_reupload().request(&request).await {
+                                    Ok(MediaRetryResult::Success { direct_path }) => {
+                                        match refreshed(direct_path) {
+                                            Some(again) => {
+                                                download_attachment(&client, &*again, &dir, &path)
+                                                    .await
+                                            }
+                                            None => Err(text),
                                         }
-                                        None => Err(text),
+                                    }
+                                    Ok(_) => {
+                                        Err("No longer available on WhatsApp's servers".to_owned())
+                                    }
+                                    Err(_error) => {
+                                        log::info!("media re-upload was not granted");
+                                        Err("No longer available on WhatsApp's servers".to_owned())
                                     }
                                 }
-                                Ok(_) => {
-                                    Err("No longer available on WhatsApp's servers".to_owned())
-                                }
-                                Err(_error) => {
-                                    log::info!("media re-upload was not granted");
-                                    Err("No longer available on WhatsApp's servers".to_owned())
-                                }
                             }
+                            _ => Err(text),
                         }
-                        _ => Err(text),
                     }
                 }
-            };
+            })
+            .await;
             let _ = commands.send(Command::Downloaded { chat, id, result });
         });
     }
@@ -6018,6 +6032,20 @@ fn ensure_message_secret(raw: Vec<u8>, secret: Option<&[u8]>) -> Vec<u8> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[tokio::test]
+    async fn stalled_attachments_finish_with_a_retryable_error() {
+        let result = with_attachment_deadline(
+            Duration::from_millis(1),
+            std::future::pending::<Result<(), String>>(),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "Download timed out");
+        assert_eq!(
+            with_attachment_deadline(Duration::from_secs(1), async { Ok(42) }).await,
+            Ok(42)
+        );
+    }
 
     fn message_quoting(sender: &str, sender_name: Option<&str>) -> Message {
         Message {
