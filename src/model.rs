@@ -562,6 +562,8 @@ pub enum ToastKind {
     Error,
 }
 
+/// Info toasts fade after a few seconds; errors stay until dismissed so they
+/// can be read to the end and copied.
 #[derive(Clone, Debug)]
 pub struct Toast {
     pub message: String,
@@ -638,6 +640,8 @@ pub enum Action {
     OpenFolder(PathBuf),
     OpenUrl(String),
     CopyText(String),
+    /// Closes the toast at this index. Only errors wait to be dismissed.
+    DismissToast(usize),
     /// Starts a reply to a message in the open chat.
     Reply(String),
     CancelReply,

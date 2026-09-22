@@ -76,6 +76,10 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **Safer desktop opening.** Links open only web pages or email addresses.
   Common documents and media open in their default apps; executable, script,
   and unrecognized attachment formats open their containing folder instead.
+- **Errors stay readable.** Confirmations such as "Copied" fade after a few
+  seconds. Error messages stay above the composer until you dismiss them, and
+  a button copies their text for a bug report. A repeated error replaces its
+  earlier copy, and only the three newest are kept.
 - **Send attachments with captions.** Paste a picture, drop files, or use the
   file picker. They stay in the composer until you send them or press Escape.
   Pasting a picture uses its image data without adding the source URL or HTML
