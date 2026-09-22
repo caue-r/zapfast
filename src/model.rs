@@ -561,6 +561,8 @@ pub enum Dialog {
     UnlockLockedChats,
     ConfirmLockChat(ChatId),
     ChatInfo(ChatId),
+    /// Confirms deleting a chat, which cannot be undone.
+    ConfirmDeleteChat(ChatId),
     /// Chooses a destination for an archived message.
     Forward {
         chat: ChatId,
@@ -740,6 +742,8 @@ pub enum Action {
         emoji: String,
     },
     SetArchived(ChatId, bool),
+    /// Deletes a chat here and on the phone.
+    DeleteChat(ChatId),
     SetPinned(ChatId, bool),
     ShowDialog(Dialog),
     CloseDialog,

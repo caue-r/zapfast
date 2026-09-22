@@ -1092,6 +1092,9 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     "Could not open the attachment: No application knows how to open \"Notes on the Engine.pdf\" (error -10814)",
                 );
             }
+            "delete-chat" => {
+                app.dialog = app.open_chat.clone().map(Dialog::ConfirmDeleteChat);
+            }
             "new-contact" => app.dialog = Some(Dialog::NewContact),
             "light" => {
                 app.settings.theme = ThemeChoice::Light;
@@ -1597,6 +1600,7 @@ mod tests {
             "forward",
             "unlink",
             "toasts",
+            "delete-chat",
             "new-contact",
             "light",
             "archived",
