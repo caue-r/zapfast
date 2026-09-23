@@ -391,6 +391,8 @@ pub enum Command {
     /// Unlinks the device remotely and locally.
     Unlink,
     Reconnect,
+    /// Use this proxy setting and reconnect. Empty follows the environment.
+    SetProxy(String),
     /// Sets aside an unreadable archive and the linked session, then starts
     /// over with a new archive and a new link.
     StartOverArchive,

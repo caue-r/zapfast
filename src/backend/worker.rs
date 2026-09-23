@@ -1092,8 +1092,19 @@ impl Worker {
             }
         };
         let sender = self.wa_sender.clone();
-        let bot = Bot::builder()
-            .with_backend(store)
+        let builder = Bot::builder().with_backend(store);
+        let builder = match crate::proxy::for_whatsapp() {
+            Some(proxy) => {
+                log::info!("connecting through the proxy {}", proxy.redacted());
+                builder
+                    .with_transport_factory(crate::proxy::ProxyTransportFactory::new(proxy))
+                    .with_http_client(whatsapp_rust::http::UreqHttpClient::with_agent(
+                        crate::proxy::agent(),
+                    ))
+            }
+            None => builder,
+        };
+        let bot = builder
             // WhatsApp reads the linked-device name, version, and icon at pairing.
             .with_device_props(
                 DevicePropsOverride::new()
@@ -3411,6 +3422,14 @@ impl Worker {
                     let _ = commands.send(Command::StickerPackImported { result });
                 });
             }
+            Command::SetProxy(setting) => {
+                crate::proxy::configure(&setting);
+                // Reconnect so the WhatsApp connection uses the new route.
+                if self.handle.is_some() {
+                    self.stop_bot().await;
+                    self.start_bot().await;
+                }
+            }
             Command::SetDownloadFolder(folder) => {
                 // Interrupted downloads leave hidden staging files behind.
                 if let Some(folder) = &folder {
@@ -4876,7 +4895,8 @@ impl Worker {
                 };
                 let url = picture.url;
                 let bytes = tokio::task::spawn_blocking(move || {
-                    ureq::get(&url)
+                    crate::proxy::agent()
+                        .get(&url)
                         .call()
                         .and_then(|mut response| response.body_mut().read_to_vec())
                         .map_err(|error| error.to_string())
@@ -5334,7 +5354,8 @@ impl Worker {
             let outcome = async {
                 let url = gif.mp4.clone();
                 let bytes = tokio::task::spawn_blocking(move || {
-                    ureq::get(&url)
+                    crate::proxy::agent()
+                        .get(&url)
                         .call()
                         .and_then(|mut response| response.body_mut().read_to_vec())
                         .map_err(|error| error.to_string())
@@ -6245,7 +6266,7 @@ fn search_gifs(query: &str, key: &str, dir: &Path) -> Result<Vec<Gif>, GifError>
             percent_encode(query.trim())
         )
     };
-    let body = match ureq::get(&url).call() {
+    let body = match crate::proxy::agent().get(&url).call() {
         Ok(mut response) => response
             .body_mut()
             .read_to_string()

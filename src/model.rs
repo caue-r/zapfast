@@ -1015,6 +1015,8 @@ pub enum Action {
     PickDownloadFolder,
     /// Sets or resets (`None`) the folder for new downloads.
     SetDownloadFolder(Option<PathBuf>),
+    /// Saves the proxy setting and reconnects. Empty follows the environment.
+    SetProxy(String),
     /// Plays a notification sound once, as a preview.
     PreviewSound(PathBuf),
     ZoomBy(f32),

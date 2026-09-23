@@ -259,6 +259,37 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         },
                     );
 
+                    section(ui, app, crate::i18n::gettext(app.locale, "Network").as_ref());
+                    let environment = app
+                        .settings
+                        .proxy
+                        .is_empty()
+                        .then(crate::proxy::for_whatsapp)
+                        .flatten();
+                    let description = match environment {
+                        Some(proxy) => format!("Using {} from the environment. Enter a proxy to replace it.", proxy.redacted()),
+                        None => "socks5h://, socks5://, or http:// with an optional user:password@. Leave empty to use ALL_PROXY or HTTPS_PROXY.".to_owned(),
+                    };
+                    widgets::setting_row(ui, &palette, "Proxy", &description, |ui| {
+                        let id = ui.id().with("proxy-draft");
+                        let mut draft = ui
+                            .data(|data| data.get_temp::<String>(id))
+                            .unwrap_or_else(|| app.settings.proxy.clone());
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut draft)
+                                .hint_text("socks5h://127.0.0.1:9050")
+                                .font(theme::regular(13.0))
+                                .text_color(palette.text)
+                                .desired_width(220.0),
+                        );
+                        if response.lost_focus() {
+                            app.actions.push(Action::SetProxy(draft.clone()));
+                            ui.data_mut(|data| data.remove::<String>(id));
+                        } else if response.has_focus() {
+                            ui.data_mut(|data| data.insert_temp(id, draft));
+                        }
+                    });
+
                     section(ui, app, crate::i18n::gettext(app.locale, "Account").as_ref());
                     let name = app.me_name.clone().unwrap_or_default();
                     let me = app.me.clone().unwrap_or_default();

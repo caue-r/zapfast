@@ -482,6 +482,16 @@ files at build time, with no runtime parsing or network access. Message
 contents, contact names, logs, and protocol errors are never translated, and
 copied messages keep WhatsApp's `[time, date] Name:` format.
 
+### Proxy
+
+**Settings > Network > Proxy** sends the WhatsApp connection, media, profile
+pictures, GIF search, Signal sticker imports, and update checks through a proxy. It accepts
+`socks5h://host:port` (the proxy resolves names, as Tor expects),
+`socks5://host:port`, and `http://host:port`, each with an optional
+`user:password@`. A bare `host:port` is an HTTP proxy. Changing it reconnects
+at once. When the field is empty, ZapFast uses `ALL_PROXY` or `HTTPS_PROXY`
+from the environment and honors `NO_PROXY`.
+
 ## Files
 
 | What | Linux | Notes |
