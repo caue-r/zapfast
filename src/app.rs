@@ -108,6 +108,10 @@ pub struct Presence {
     pub last_seen: Option<i64>,
 }
 
+/// WhatsApp keeps at most three pinned chats without WhatsApp Plus, and
+/// replaces an existing pin on the phone when a linked device adds a fourth.
+const MAX_PINNED_CHATS: usize = 3;
+
 pub struct App {
     pub dirs: AppDirs,
     pub settings: Settings,
@@ -2737,6 +2741,10 @@ impl App {
             // `Event::ChatRemoved`.
             Action::DeleteChat(chat) => self.backend.send(Command::DeleteChat(chat)),
             Action::SetPinned(chat, pinned) => {
+                if pinned && self.pinned_count() >= MAX_PINNED_CHATS {
+                    self.toast(format!("You can only pin {MAX_PINNED_CHATS} chats"));
+                    return;
+                }
                 if let Some(known) = self.chat_mut(&chat) {
                     known.pinned = pinned;
                     known.pinned_at = if pinned {
@@ -3070,6 +3078,14 @@ impl App {
             kind: ToastKind::Error,
             created: Instant::now(),
         });
+    }
+
+    /// Chats pinned to the top, counted the way WhatsApp limits them.
+    fn pinned_count(&self) -> usize {
+        self.chats
+            .iter()
+            .filter(|chat| chat.pinned && !chat.archived)
+            .count()
     }
 
     /// Tells the backend whether the person is looking at the app, so the
@@ -4012,6 +4028,34 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn a_fourth_pin_is_refused_like_on_the_phone() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        for index in 0..5 {
+            let mut chat = Chat::new(format!("{index}@s.whatsapp.net"), format!("Chat {index}"));
+            chat.pinned = index < 3;
+            chat.archived = index == 4;
+            app.chats.push(chat);
+        }
+        app.apply(
+            Action::SetPinned("3@s.whatsapp.net".into(), true),
+            &egui::Context::default(),
+        );
+        assert!(!app.chat("3@s.whatsapp.net").unwrap().pinned);
+        assert!(commands.try_recv().is_err());
+        app.apply(
+            Action::SetPinned("0@s.whatsapp.net".into(), false),
+            &egui::Context::default(),
+        );
+        app.apply(
+            Action::SetPinned("3@s.whatsapp.net".into(), true),
+            &egui::Context::default(),
+        );
+        assert!(app.chat("3@s.whatsapp.net").unwrap().pinned);
     }
 
     #[test]

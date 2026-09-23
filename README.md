@@ -28,7 +28,7 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   Filter the list to unread, private (one-to-one), or group chats with the
   chips under the search bar; a chip with unread chats shows how many it has.
   Pinned chats stay in pin order (most recently pinned first), regardless of
-  new messages. Chat and contact name searches ignore accents, so `Angel`
+  new messages. Like on the phone, you can pin up to three chats. Chat and contact name searches ignore accents, so `Angel`
   finds `Ángel`.
   The filters stay on one row and scroll horizontally in narrow sidebars.
   Unnamed groups use a shared participant summary for their title and subtitle;
