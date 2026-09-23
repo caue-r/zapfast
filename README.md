@@ -319,7 +319,12 @@ plaintext archive. Back up both the archive and its OS keyring key: copying only
 A missing key is different from a locked keyring. If ZapFast says the key is
 missing, restore the original OS credential store or use the original profile
 location. Do not delete the archive or create replacement credentials: neither
-can decrypt the existing archive. For help, report the OS, app version, whether
+can decrypt the existing archive. If the original key cannot come back,
+**Start over…** on that screen renames the unreadable archive to
+`archive-unreadable-<date>.db` beside it, forgets the linked session, and
+shows the linking screen: linking again brings recent history back from your
+phone. Remove the old ZapFast entry under Linked devices on the phone
+afterwards. For help, report the OS, app version, whether
 the profile was moved/restored, and the error text with personal paths removed.
 Never attach the archive, keys, or full logs from older releases.
 

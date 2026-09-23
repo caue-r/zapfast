@@ -35,7 +35,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::NewChat => 420.0,
                 Dialog::UnlockLockedChats | Dialog::ConfirmLockChat(_) => 380.0,
                 Dialog::ChatInfo(_) => 360.0,
-                Dialog::ConfirmDeleteChat(_) | Dialog::JoinGroup => 380.0,
+                Dialog::ConfirmDeleteChat(_) | Dialog::JoinGroup | Dialog::ConfirmStartOver => {
+                    380.0
+                }
                 Dialog::Forward { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
                 Dialog::PollResults { .. } | Dialog::InteractiveList { .. } => {
@@ -65,6 +67,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ConfirmDeleteChat(id) => confirm_delete_chat(app, ui, &id),
                 Dialog::Forward { chat, message } => forward(app, ui, &chat, &message),
                 Dialog::JoinGroup => join_group(app, ui),
+                Dialog::ConfirmStartOver => confirm_start_over(app, ui),
             }
         });
     if response.should_close() {
@@ -761,6 +764,34 @@ fn cancel_row(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if theme::pill_button(ui, &palette, "Close", false).clicked() {
+                app.actions.push(Action::CloseDialog);
+            }
+        });
+    });
+}
+
+fn confirm_start_over(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    title(ui, app, "Start over?");
+    theme::paragraph(
+        ui,
+        "ZapFast keeps your unreadable archive as a separate file, creates a new one, and asks you to link again. Linking again brings back recent history from your phone. Afterwards, remove the old ZapFast entry under Linked devices on your phone.",
+        theme::regular(13.5),
+        palette.text,
+    );
+    theme::paragraph(
+        ui,
+        "If you can restore the original keyring instead, choose Cancel and Try again: nothing is lost that way.",
+        theme::regular(13.0),
+        palette.secondary,
+    );
+    ui.add_space(10.0);
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if danger_button(ui, app, "Start over") {
+                app.actions.push(Action::StartOverArchive);
+            }
+            if theme::pill_button(ui, &palette, "Cancel", false).clicked() {
                 app.actions.push(Action::CloseDialog);
             }
         });

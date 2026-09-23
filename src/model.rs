@@ -700,6 +700,8 @@ pub enum Dialog {
     },
     /// Previews a group invite link before joining.
     JoinGroup,
+    /// Confirms setting aside an archive whose key is gone.
+    ConfirmStartOver,
 }
 
 /// A group invite link being previewed or joined.
@@ -971,6 +973,8 @@ pub enum Action {
     /// Unlinks the device remotely and locally.
     Unlink,
     Reconnect,
+    /// Sets aside an archive whose key is gone and links again.
+    StartOverArchive,
     Quit,
     /// Shows the window, creating it when running headless.
     ShowWindow,

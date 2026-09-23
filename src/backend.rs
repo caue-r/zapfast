@@ -370,6 +370,9 @@ pub enum Command {
     /// Unlinks the device remotely and locally.
     Unlink,
     Reconnect,
+    /// Sets aside an unreadable archive and the linked session, then starts
+    /// over with a new archive and a new link.
+    StartOverArchive,
     /// Whether the person is looking at ZapFast. While they are not, the
     /// linked phone keeps receiving push notifications.
     SetOnline(bool),

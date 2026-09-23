@@ -344,6 +344,22 @@ pub async fn run(
                 loop {
                     match inbox.recv().await {
                         Some(Command::Reconnect) => break,
+                        Some(Command::StartOverArchive) => {
+                            match set_aside_unreadable_archive(&dirs) {
+                                Ok(kept) => log::warn!(
+                                    "set aside an unreadable archive as {}",
+                                    kept.file_name().unwrap_or_default().to_string_lossy()
+                                ),
+                                Err(error) => {
+                                    let _ = events.send(Event::Link(LinkStatus::Failed(format!(
+                                        "Could not set the old archive aside: {error}"
+                                    ))));
+                                    waker.wake();
+                                    continue;
+                                }
+                            }
+                            break;
+                        }
                         Some(Command::Shutdown) | None => return,
                         _ => {}
                     }
@@ -473,6 +489,37 @@ enum RuntimeEvent {
         locks: bool,
         complete: bool,
     },
+}
+
+/// Renames an archive whose key is gone, with its SQLite side files, and
+/// removes the linked session so the next link replays history into a new
+/// archive. Nothing is deleted from the archive: restoring the original
+/// keyring and renaming the file back recovers it.
+fn set_aside_unreadable_archive(dirs: &AppDirs) -> std::io::Result<PathBuf> {
+    let archive = dirs.archive_db();
+    let stamp = jiff::Zoned::now().strftime("%Y%m%d-%H%M%S").to_string();
+    let kept = archive.with_file_name(format!("archive-unreadable-{stamp}.db"));
+    std::fs::rename(&archive, &kept)?;
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let mut from = archive.clone().into_os_string();
+        from.push(suffix);
+        let mut to = kept.clone().into_os_string();
+        to.push(suffix);
+        match std::fs::rename(&from, &to) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+    }
+    let session = dirs.session_db();
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let mut path = session.clone().into_os_string();
+        path.push(suffix);
+        match std::fs::remove_file(path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+    }
+    Ok(kept)
 }
 
 /// A short explanation for a failed invite lookup or join. Protocol errors
@@ -3526,6 +3573,8 @@ impl Worker {
                 self.emit(Event::ReceiptsPrivacy { disabled });
             }
             Command::SetOnline(online) => self.set_online(online),
+            // Only meaningful while the archive cannot be opened.
+            Command::StartOverArchive => {}
             Command::PreviewInvite(code) => {
                 let Some(client) = self.client.clone() else {
                     self.emit(Event::InvitePreview {
@@ -7054,6 +7103,26 @@ mod tests {
         assert!(!worker.unavailable_due(), "announced once per connection");
         worker.set_online(true);
         assert!(!worker.unavailable_due());
+    }
+
+    #[test]
+    fn starting_over_keeps_the_old_archive_and_forgets_the_link() {
+        let root = std::env::temp_dir().join(format!("zapfast-start-over-{}", std::process::id()));
+        let dirs = AppDirs::under(&root);
+        dirs.ensure().unwrap();
+        std::fs::write(dirs.archive_db(), b"encrypted").unwrap();
+        let mut wal = dirs.archive_db().into_os_string();
+        wal.push("-wal");
+        std::fs::write(&wal, b"log").unwrap();
+        std::fs::write(dirs.session_db(), b"keys").unwrap();
+        let kept = set_aside_unreadable_archive(&dirs).unwrap();
+        assert_eq!(std::fs::read(&kept).unwrap(), b"encrypted");
+        let mut kept_wal = kept.clone().into_os_string();
+        kept_wal.push("-wal");
+        assert_eq!(std::fs::read(kept_wal).unwrap(), b"log");
+        assert!(!dirs.archive_db().exists());
+        assert!(!dirs.session_db().exists());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -3192,6 +3192,10 @@ impl App {
                 self.backend.send(Command::Unlink);
             }
             Action::Reconnect => self.backend.send(Command::Reconnect),
+            Action::StartOverArchive => {
+                self.dialog = None;
+                self.backend.send(Command::StartOverArchive);
+            }
             Action::Quit => {
                 self.quit_requested = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
