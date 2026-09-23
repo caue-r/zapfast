@@ -1468,6 +1468,16 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "delete-chat" => {
                 app.dialog = app.open_chat.clone().map(Dialog::ConfirmDeleteChat);
             }
+            "unread-divider" => {
+                let id = SAMPLES[1].id.to_owned();
+                app.open_chat = Some(id.clone());
+                app.unread_divider = Some(crate::app::UnreadDivider {
+                    chat: id,
+                    count: 3,
+                    placed: false,
+                });
+                app.scroll_to_bottom = true;
+            }
             "invite" => {
                 app.invite = Some(crate::model::GroupInvite {
                     code: "DemoInviteCode123".into(),
@@ -2823,6 +2833,7 @@ mod tests {
             "toasts",
             "delete-chat",
             "invite",
+            "unread-divider",
             "new-contact",
             "light",
             "archived",

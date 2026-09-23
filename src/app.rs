@@ -130,6 +130,17 @@ pub struct Presence {
     pub last_seen: Option<i64>,
 }
 
+/// The "unread messages" divider of the open chat. It stays until another
+/// chat opens, like on the phone.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnreadDivider {
+    pub chat: ChatId,
+    /// Unread incoming messages when the chat was opened.
+    pub count: u32,
+    /// The transcript has scrolled to it once.
+    pub placed: bool,
+}
+
 /// WhatsApp keeps at most three pinned chats without WhatsApp Plus, and
 /// replaces an existing pin on the phone when a linked device adds a fourth.
 const MAX_PINNED_CHATS: usize = 3;
@@ -202,6 +213,8 @@ pub struct App {
     pub account_receipts_off: bool,
     /// The group invite link being previewed or joined.
     pub invite: Option<crate::model::GroupInvite>,
+    /// Where the unread messages began when the open chat was opened.
+    pub unread_divider: Option<UnreadDivider>,
     avatars: HashMap<String, Option<PathBuf>>,
     avatar_requests: HashSet<String>,
     /// Full-size profile pictures for info dialogs.
@@ -461,6 +474,7 @@ impl App {
             presence: HashMap::new(),
             account_receipts_off: false,
             invite: None,
+            unread_divider: None,
             avatars: HashMap::new(),
             avatar_requests: HashSet::new(),
             avatars_full: HashMap::new(),
@@ -1855,6 +1869,14 @@ impl App {
                 }
                 self.stop_composing(&previous);
             }
+            self.unread_divider =
+                self.chat(&id)
+                    .filter(|chat| chat.unread > 0)
+                    .map(|chat| UnreadDivider {
+                        chat: id.clone(),
+                        count: chat.unread,
+                        placed: false,
+                    });
             self.composer = self.drafts.remove(&id).unwrap_or_default();
             self.composer_mentions = self.draft_mentions.remove(&id).unwrap_or_default();
             self.reply_to = None;
@@ -4163,6 +4185,26 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn opening_an_unread_chat_remembers_where_its_unread_messages_begin() {
+        let mut app = app();
+        let mut busy = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
+        busy.unread = 4;
+        let quiet = Chat::new("2@s.whatsapp.net".into(), "Bob".into());
+        app.chats = vec![busy, quiet];
+        app.open_chat("1@s.whatsapp.net".into());
+        assert_eq!(
+            app.unread_divider.as_ref().map(|divider| divider.count),
+            Some(4)
+        );
+        assert_eq!(app.chat("1@s.whatsapp.net").unwrap().unread, 0);
+        // Reopening the same chat keeps it; another chat without unread clears it.
+        app.open_chat("1@s.whatsapp.net".into());
+        assert!(app.unread_divider.is_some());
+        app.open_chat("2@s.whatsapp.net".into());
+        assert!(app.unread_divider.is_none());
     }
 
     #[test]

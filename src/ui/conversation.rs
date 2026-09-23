@@ -1267,7 +1267,23 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     };
     let mut actions = Vec::new();
     let mut anchored = false;
-    let scroll_to_bottom = app.scroll_to_bottom;
+    // The first unread message is the count-th incoming one from the end.
+    let divider = app
+        .unread_divider
+        .as_ref()
+        .filter(|divider| divider.chat == chat.id)
+        .and_then(|divider| {
+            conversation
+                .messages
+                .iter()
+                .rev()
+                .filter(|message| !message.from_me)
+                .nth(divider.count.saturating_sub(1) as usize)
+                .map(|message| (message.id.clone(), divider.count, divider.placed))
+        });
+    let mut divider_placed = false;
+    let scroll_to_bottom =
+        app.scroll_to_bottom && divider.as_ref().is_none_or(|(.., placed)| *placed);
     let app_pictures = app.settings.show_sender_pictures;
     // Do not animate programmatic scrolling. Pending animations can delay a
     // later request to reach the end.
@@ -1332,6 +1348,26 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             });
                             ui.add_space(4.0);
                         }
+                        if let Some((id, count, placed)) = &divider
+                            && *id == message.id
+                        {
+                            ui.add_space(6.0);
+                            let label = crate::i18n::ngettext(
+                                app.locale,
+                                "{} unread message",
+                                "{} unread messages",
+                                *count,
+                            )
+                            .replace("{}", &count.to_string());
+                            let response = ui
+                                .vertical_centered(|ui| widgets::chip(ui, &palette, &label))
+                                .inner;
+                            if !placed && view.anchor.is_none() {
+                                response.scroll_to_me(Some(Align::Min));
+                                divider_placed = true;
+                            }
+                            ui.add_space(4.0);
+                        }
                         let show_sender = (chat.is_group() || app_pictures)
                             && !message.from_me
                             && (new_day
@@ -1389,6 +1425,12 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         .insert(chat.id.clone(), std::mem::take(&mut conversation));
     app.at_bottom = at_bottom;
     if app.scroll_to_bottom && (reader_scrolled || keyboard_navigation.get()) {
+        app.scroll_to_bottom = false;
+    }
+    if divider_placed {
+        if let Some(divider) = app.unread_divider.as_mut() {
+            divider.placed = true;
+        }
         app.scroll_to_bottom = false;
     }
     if anchored {
