@@ -4246,11 +4246,10 @@ mod tests {
             .unwrap_or_default()
     }
 
-    /// The sent row only informs; delivery and read times open from "Message
-    /// info". The message id is copied by a row that says so, not by clicking
-    /// "Sent".
+    /// The menu lists actions only: sent, delivery, and read times open from
+    /// "Message info", and the message id is copied by a row that says so.
     #[test]
-    fn message_status_rows_are_not_actions() {
+    fn message_menu_lists_actions_only() {
         use egui::accesskit::Role;
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -4266,10 +4265,15 @@ mod tests {
                 .unwrap_or_else(|| panic!("no {prefix} row"))
                 .clone()
         };
-        let (label, role, _) = find("Sent ");
-        assert_eq!(role, Role::Label, "{label} is information, not a button");
+        for status in ["Sent ", "Delivered ", "Read "] {
+            assert!(
+                nodes.iter().all(|(label, _, _)| !label.starts_with(status)),
+                "the menu has no {status}row"
+            );
+        }
         assert_eq!(find("Message info").1, Role::Button);
-        assert_eq!(find("Copy message ID").1, Role::Button);
+        let (_, role, copy) = find("Copy message ID");
+        assert_eq!(role, Role::Button);
 
         let click = |app: &mut App, pos: egui::Pos2| {
             let press = |pressed| egui::Event::PointerButton {
@@ -4281,20 +4285,6 @@ mod tests {
             accessible_nodes(app, &ctx, vec![egui::Event::PointerMoved(pos), press(true)]);
             accessible_nodes(app, &ctx, vec![press(false)]);
         };
-        click(&mut app, find("Sent ").2);
-        assert!(
-            app.toasts.iter().all(|toast| toast.message != "Copied"),
-            "clicking Sent copies nothing"
-        );
-
-        app.open_message_menu = Some("ada-link".into());
-        render(&mut app, &ctx);
-        let nodes = accessible_nodes(&mut app, &ctx, Vec::new());
-        let copy = nodes
-            .iter()
-            .find(|(label, _, _)| label == "Copy message ID")
-            .expect("the menu is open again")
-            .2;
         click(&mut app, copy);
         assert!(app.toasts.iter().any(|toast| toast.message == "Copied"));
     }
