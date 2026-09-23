@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 20:14+0200\n"
+"POT-Creation-Date: 2026-09-23 22:54+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: French\n"
@@ -336,16 +336,14 @@ msgstr ""
 "relance ensuite."
 
 #: src/ui/settings.rs:193
-msgid "Pause music while playing voice messages"
-msgstr "Mettre la musique en pause pendant la lecture des messages vocaux"
+msgid "Pause music while playing voice messages and videos"
+msgstr "Mettre la musique en pause pendant les vocaux et les vidéos"
 
 #: src/ui/settings.rs:193
 msgid ""
-"Pause media players while a voice or audio message plays and resume them "
-"when it stops."
-msgstr ""
-"Met en pause les lecteurs pendant la lecture d'un message vocal ou audio et "
-"les relance à la fin."
+"Pause media players while a voice message, audio, or video plays with sound, "
+"and resume them when it stops."
+msgstr "Met en pause les lecteurs pendant la lecture d'un vocal, d'un audio ou d'une vidéo avec le son, et les relance à la fin."
 
 #: src/ui/settings.rs:232
 msgid "Window"
@@ -503,7 +501,7 @@ msgstr "Envoi du pack de stickers…"
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "Vous avez {limit} étiquettes, le maximum que ZapFast conserve."
 
-#: src/app.rs:4096
+#: src/app.rs:4097
 msgid "This video opens in your system player"
 msgstr "Cette vidéo s'ouvre dans le lecteur du système"
 
@@ -653,7 +651,9 @@ msgstr "Les stickers que vous envoyez s’affichent ici."
 msgid ""
 "Right-click any sticker to add it to your favorites. They stay in sync with "
 "your phone."
-msgstr "Faites un clic droit sur un sticker pour l’ajouter à vos favoris. Ils restent synchronisés avec votre téléphone."
+msgstr ""
+"Faites un clic droit sur un sticker pour l’ajouter à vos favoris. Ils "
+"restent synchronisés avec votre téléphone."
 
 #: src/ui/picker.rs:1264
 msgid "Remove this pack"
@@ -676,7 +676,9 @@ msgstr "Importer un pack"
 #: src/ui/picker.rs:1373
 msgid ""
 "Paste a signal.art link from signalstickers.org, or open a .wastickers file."
-msgstr "Collez un lien signal.art depuis signalstickers.org ou ouvrez un fichier .wastickers."
+msgstr ""
+"Collez un lien signal.art depuis signalstickers.org ou ouvrez un "
+"fichier .wastickers."
 
 #: src/ui/picker.rs:1383
 msgid "Make your own"
@@ -686,7 +688,9 @@ msgstr "Créez les vôtres"
 msgid ""
 "Start a pack, then right-click any sticker to add it. Or turn a picture into "
 "a sticker."
-msgstr "Créez un pack, puis faites un clic droit sur un sticker pour l’y ajouter. Ou transformez une image en sticker."
+msgstr ""
+"Créez un pack, puis faites un clic droit sur un sticker pour l’y ajouter. Ou "
+"transformez une image en sticker."
 
 #: src/ui/picker.rs:1403
 msgid "Make a sticker from a picture…"

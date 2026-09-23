@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 20:14+0200\n"
+"POT-Creation-Date: 2026-09-23 22:54+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Russian\n"
@@ -342,16 +342,14 @@ msgstr ""
 "после."
 
 #: src/ui/settings.rs:193
-msgid "Pause music while playing voice messages"
-msgstr "Ставить музыку на паузу при прослушивании голосовых"
+msgid "Pause music while playing voice messages and videos"
+msgstr "Пауза музыки при голосовых и видео"
 
 #: src/ui/settings.rs:193
 msgid ""
-"Pause media players while a voice or audio message plays and resume them "
-"when it stops."
-msgstr ""
-"Ставить плееры на паузу, пока играет голосовое или аудиосообщение, и "
-"продолжать после."
+"Pause media players while a voice message, audio, or video plays with sound, "
+"and resume them when it stops."
+msgstr "Ставить плееры на паузу, пока играет голосовое, аудио или видео со звуком, и продолжать после."
 
 #: src/ui/settings.rs:232
 msgid "Window"
@@ -510,7 +508,7 @@ msgstr "Отправка набора стикеров…"
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "У вас {limit} меток — больше ZapFast не хранит."
 
-#: src/app.rs:4096
+#: src/app.rs:4097
 msgid "This video opens in your system player"
 msgstr "Это видео откроется в системном плеере"
 
@@ -661,7 +659,9 @@ msgstr "Здесь появляются стикеры, которые вы от
 msgid ""
 "Right-click any sticker to add it to your favorites. They stay in sync with "
 "your phone."
-msgstr "Нажмите на любой стикер правой кнопкой, чтобы добавить его в избранное. Избранное синхронизируется с телефоном."
+msgstr ""
+"Нажмите на любой стикер правой кнопкой, чтобы добавить его в избранное. "
+"Избранное синхронизируется с телефоном."
 
 #: src/ui/picker.rs:1264
 msgid "Remove this pack"
@@ -684,7 +684,9 @@ msgstr "Импортировать набор"
 #: src/ui/picker.rs:1373
 msgid ""
 "Paste a signal.art link from signalstickers.org, or open a .wastickers file."
-msgstr "Вставьте ссылку signal.art с signalstickers.org или откройте файл .wastickers."
+msgstr ""
+"Вставьте ссылку signal.art с signalstickers.org или откройте "
+"файл .wastickers."
 
 #: src/ui/picker.rs:1383
 msgid "Make your own"
@@ -694,7 +696,9 @@ msgstr "Создайте свои"
 msgid ""
 "Start a pack, then right-click any sticker to add it. Or turn a picture into "
 "a sticker."
-msgstr "Создайте набор, затем нажмите на любой стикер правой кнопкой, чтобы добавить его. Или превратите картинку в стикер."
+msgstr ""
+"Создайте набор, затем нажмите на любой стикер правой кнопкой, чтобы добавить "
+"его. Или превратите картинку в стикер."
 
 #: src/ui/picker.rs:1403
 msgid "Make a sticker from a picture…"
