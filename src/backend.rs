@@ -316,6 +316,21 @@ pub enum Command {
     PickChatSound(ChatId),
     /// Asks for a folder for new downloads.
     PickDownloadFolder,
+    /// Changes our display name and About text; `None` keeps the current one.
+    SetProfile {
+        name: Option<String>,
+        about: Option<String>,
+    },
+    /// Asks for a picture and makes it our profile picture.
+    PickProfilePicture,
+    /// Internal: a picked picture, cropped and encoded as JPEG.
+    SetProfilePicture(Vec<u8>),
+    /// Internal: the server accepted a profile change.
+    ProfileSaved {
+        name: Option<String>,
+        about: Option<String>,
+        picture: bool,
+    },
     /// Where new downloads go; `None` is the cache.
     SetDownloadFolder(Option<std::path::PathBuf>),
     /// Asks where to save a copy of an attachment, then copies it there.

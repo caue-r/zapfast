@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:08+0200\n"
+"POT-Creation-Date: 2026-09-23 16:14+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: German\n"
@@ -135,7 +135,7 @@ msgstr "November"
 msgid "December"
 msgstr "Dezember"
 
-#: src/ui/chats.rs:111 src/ui/chats.rs:226 src/ui/settings.rs:168
+#: src/ui/chats.rs:111 src/ui/chats.rs:226 src/ui/settings.rs:169
 msgid "Chats"
 msgstr "Chats"
 
@@ -194,7 +194,7 @@ msgid_plural "{} unread messages"
 msgstr[0] "{} ungelesene Nachricht"
 msgstr[1] "{} ungelesene Nachrichten"
 
-#: src/ui/dialogs.rs:1141
+#: src/ui/dialogs.rs:1146
 #, rust-format
 msgid "{} member"
 msgid_plural "{} members"
@@ -217,30 +217,75 @@ msgstr "Sprache"
 msgid "Auto"
 msgstr "Automatisch"
 
-#: src/ui/settings.rs:218
+#: src/ui/settings.rs:220
 msgid "Window"
 msgstr "Fenster"
 
-#: src/ui/settings.rs:262
+#: src/ui/settings.rs:265
 msgid "Network"
 msgstr "Netzwerk"
 
-#: src/ui/settings.rs:293
+#: src/ui/settings.rs:297
 msgid "Account"
 msgstr "Konto"
 
-#: src/ui/settings.rs:320
+#: src/ui/settings.rs:301
 msgid "Files"
 msgstr "Dateien"
 
-#: src/ui/settings.rs:365
+#: src/ui/settings.rs:347 src/ui/settings.rs:608 src/ui/settings.rs:770
 msgid "About"
 msgstr "Über"
 
-#: src/ui/settings.rs:458
+#: src/ui/settings.rs:428
 msgid "Add doodles"
 msgstr "Doodles hinzufügen"
 
-#: src/ui/settings.rs:462
+#: src/ui/settings.rs:432
 msgid "Show the default doodles over the selected colour."
 msgstr "Die Standard-Doodles über der gewählten Farbe anzeigen."
+
+#: src/ui/settings.rs:577
+msgid "Change profile picture"
+msgstr ""
+
+#: src/ui/settings.rs:600
+msgid "Your name"
+msgstr ""
+
+#: src/ui/settings.rs:616
+msgid "Linked device"
+msgstr ""
+
+#: src/ui/settings.rs:627
+msgid "Edit your name and About"
+msgstr ""
+
+#: src/ui/settings.rs:644
+msgid "Unlink this computer"
+msgstr ""
+
+#: src/ui/settings.rs:664
+msgid "Save"
+msgstr ""
+
+#: src/ui/settings.rs:674
+msgid "Cancel"
+msgstr ""
+
+#: src/ui/settings.rs:738
+msgid "A native WhatsApp client built with Rust, egui, and whatsapp-rust."
+msgstr ""
+
+#: src/ui/settings.rs:749
+#, rust-format
+msgid "Update to {version}"
+msgstr ""
+
+#: src/ui/settings.rs:759
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#: src/ui/settings.rs:781
+msgid "Source code"
+msgstr ""
