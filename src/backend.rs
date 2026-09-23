@@ -16,6 +16,7 @@ use crate::paths::AppDirs;
 mod read_sync;
 pub(crate) mod sticker_import;
 mod worker;
+pub use worker::{PINNED_CHATS, PLUS_PINNED_CHATS};
 
 /// Phone-link state.
 #[derive(Clone, Debug, PartialEq)]
@@ -510,6 +511,8 @@ pub enum Command {
     ReceiptsPrivacy {
         disabled: bool,
     },
+    /// Internal: followed channels and whether each is muted on the server.
+    ChannelMutes(Vec<(String, bool)>),
     /// Looks up the group behind an invite code without joining.
     PreviewInvite(String),
     /// Joins the group behind an invite code.
@@ -651,6 +654,8 @@ pub enum Event {
     ReceiptsPrivacy {
         disabled: bool,
     },
+    /// How many chats this account may pin: more with WhatsApp Plus.
+    PinLimit(usize),
     /// The followed message's receipts, sent when following starts and
     /// whenever one arrives.
     Receipts(crate::model::MessageReceipts),

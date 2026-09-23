@@ -29,6 +29,7 @@ use whatsapp_rust::types::presence::{ChatPresence, ReceiptType};
 use whatsapp_rust::upload::UploadOptions;
 use whatsapp_rust::wacore::download::{DownloadWriter, Downloadable};
 use whatsapp_rust::wacore::history_sync::{HistorySyncStream, MAX_DECOMPRESSED};
+use whatsapp_rust::wacore::iq::abprops;
 use whatsapp_rust::wacore::store::DevicePropsOverride;
 use whatsapp_rust::wacore_binary::jid::JidExt;
 use whatsapp_rust::waproto::buffa::Message as _;
@@ -233,6 +234,39 @@ fn discard_attachment_staging(dir: &Path) {
             log::warn!("could not remove incomplete attachment");
         }
     }
+}
+
+/// WhatsApp keeps at most three pinned chats without WhatsApp Plus, and
+/// replaces an existing pin on the phone when a linked device adds a fourth.
+pub const PINNED_CHATS: usize = 3;
+/// WhatsApp Plus raises the limit to twenty.
+pub const PLUS_PINNED_CHATS: usize = 20;
+
+/// Reports how many chats this account may pin. The AB props arrive shortly
+/// after connecting and there is no event for them, so this polls briefly.
+fn spawn_pin_limit_check(
+    client: Arc<Client>,
+    events: std::sync::mpsc::Sender<Event>,
+    waker: Waker,
+) {
+    tokio::spawn(async move {
+        for _ in 0..30 {
+            if let Some(plus) = client
+                .ab_prop_enabled(abprops::web::AURA_PINNED_CHATS_BENEFIT_ACTIVE)
+                .await
+            {
+                let limit = if plus {
+                    PLUS_PINNED_CHATS
+                } else {
+                    PINNED_CHATS
+                };
+                let _ = events.send(Event::PinLimit(limit));
+                waker.wake();
+                return;
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    });
 }
 
 fn account_allows_receipts(
@@ -1185,7 +1219,9 @@ impl Worker {
             }
         };
         let sender = self.wa_sender.clone();
-        let builder = Bot::builder().with_backend(store);
+        let builder = Bot::builder()
+            .with_backend(store)
+            .with_watched_ab_props([abprops::web::AURA_PINNED_CHATS_BENEFIT_ACTIVE]);
         let builder = match crate::proxy::for_whatsapp() {
             Some(proxy) => {
                 log::info!("connecting through the proxy {}", proxy.redacted());
@@ -1853,6 +1889,25 @@ impl Worker {
                     let commands = self.commands.clone();
                     self.online_sent = None;
                     self.announce_presence(self.online_wanted);
+                    spawn_pin_limit_check(client.clone(), self.events.clone(), self.waker.clone());
+                    let channels = self.commands.clone();
+                    let followed = client.clone();
+                    tokio::spawn(async move {
+                        // A channel's Mute lives on the channel, not in the
+                        // chat's app state, so read it from the server.
+                        match followed.newsletter().list_subscribed().await {
+                            Ok(list) => {
+                                let mutes = list
+                                    .into_iter()
+                                    .filter_map(|channel| {
+                                        Some((channel.jid.to_string(), channel.muted?))
+                                    })
+                                    .collect();
+                                let _ = channels.send(Command::ChannelMutes(mutes));
+                            }
+                            Err(error) => log::debug!("followed channels not listed: {error}"),
+                        }
+                    });
                     tokio::spawn(async move {
                         // whatsapp-rust also enforces the account privacy setting.
                         match client.fetch_privacy_settings().await {
@@ -4379,6 +4434,18 @@ impl Worker {
                     }
                     .map_err(|error| error.to_string())
                 });
+            }
+            Command::ChannelMutes(mutes) => {
+                for (chat, muted) in mutes {
+                    let Ok(Some(known)) = self.archive.chat(&chat) else {
+                        continue;
+                    };
+                    // Mirror the phone's channel Mute without echoing it back.
+                    if muted != known.muted(crate::util::now()) {
+                        let _ = self.archive.set_muted(&chat, muted.then_some(0));
+                        self.emit_chat(&chat);
+                    }
+                }
             }
             Command::SetMuted(chat, until) => {
                 let _ = self.archive.set_muted(&chat, until);
@@ -7955,6 +8022,27 @@ mod tests {
             })
             .await;
         assert!(matches!(events.try_recv().unwrap(), Event::Error(_)));
+    }
+
+    #[tokio::test]
+    async fn channel_mutes_from_the_server_mirror_into_the_archive() {
+        let (mut worker, _events, _, _) = receipt_tests::worker();
+        const MUTED: &str = "1@newsletter";
+        const UNMUTED: &str = "2@newsletter";
+        worker.archive.ensure_chat(MUTED, "Muted").unwrap();
+        worker.archive.ensure_chat(UNMUTED, "Unmuted").unwrap();
+        worker.archive.set_muted(UNMUTED, Some(0)).unwrap();
+        worker
+            .handle_command(Command::ChannelMutes(vec![
+                (MUTED.into(), true),
+                (UNMUTED.into(), false),
+                ("unknown@newsletter".into(), true),
+            ]))
+            .await;
+        let now = crate::util::now();
+        assert!(worker.archive.chat(MUTED).unwrap().unwrap().muted(now));
+        assert!(!worker.archive.chat(UNMUTED).unwrap().unwrap().muted(now));
+        assert!(worker.archive.chat("unknown@newsletter").unwrap().is_none());
     }
 
     fn unconfirmed(worker: &mut Worker) {

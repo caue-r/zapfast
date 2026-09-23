@@ -142,10 +142,6 @@ pub struct UnreadDivider {
     pub placed: bool,
 }
 
-/// WhatsApp keeps at most three pinned chats without WhatsApp Plus, and
-/// replaces an existing pin on the phone when a linked device adds a fourth.
-const MAX_PINNED_CHATS: usize = 3;
-
 pub struct App {
     pub dirs: AppDirs,
     pub settings: Settings,
@@ -252,6 +248,8 @@ pub struct App {
     pub reaction_target: Option<(ChatId, String)>,
     /// Control that opened the reaction picker.
     pub reaction_anchor: Option<egui::Rect>,
+    /// Chats this account may pin; WhatsApp Plus raises it once known.
+    pub pin_limit: usize,
     /// The reaction picker came from a message's context menu, which stays
     /// open beside it.
     pub reaction_beside_menu: bool,
@@ -547,6 +545,7 @@ impl App {
             picker_focus: false,
             reaction_target: None,
             reaction_anchor: None,
+            pin_limit: crate::backend::PINNED_CHATS,
             reaction_beside_menu: false,
             open_message_menu: None,
             #[cfg(any(test, feature = "demo"))]
@@ -1690,6 +1689,7 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::PinLimit(limit) => self.pin_limit = limit,
                 Event::Receipts(receipts) => {
                     // A late answer for a dialog that has since closed is stale.
                     if self.receipts_watch.as_ref().is_some_and(|(chat, message)| {
@@ -3317,8 +3317,8 @@ impl App {
             // `Event::ChatRemoved`.
             Action::DeleteChat(chat) => self.backend.send(Command::DeleteChat(chat)),
             Action::SetPinned(chat, pinned) => {
-                if pinned && self.pinned_count() >= MAX_PINNED_CHATS {
-                    self.toast(format!("You can only pin {MAX_PINNED_CHATS} chats"));
+                if pinned && self.pinned_count() >= self.pin_limit {
+                    self.toast(format!("You can only pin {} chats", self.pin_limit));
                     return;
                 }
                 if let Some(known) = self.chat_mut(&chat) {
@@ -5363,6 +5363,24 @@ mod tests {
             Action::SetPinned("0@s.whatsapp.net".into(), false),
             &egui::Context::default(),
         );
+        app.apply(
+            Action::SetPinned("3@s.whatsapp.net".into(), true),
+            &egui::Context::default(),
+        );
+        assert!(app.chat("3@s.whatsapp.net").unwrap().pinned);
+    }
+
+    #[test]
+    fn whatsapp_plus_raises_the_pin_limit() {
+        let mut app = app();
+        let (backend, _commands) = Backend::recording();
+        app.backend = backend;
+        for index in 0..4 {
+            let mut chat = Chat::new(format!("{index}@s.whatsapp.net"), format!("Chat {index}"));
+            chat.pinned = index < 3;
+            app.chats.push(chat);
+        }
+        app.pin_limit = crate::backend::PLUS_PINNED_CHATS;
         app.apply(
             Action::SetPinned("3@s.whatsapp.net".into(), true),
             &egui::Context::default(),
