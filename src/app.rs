@@ -200,6 +200,8 @@ pub struct App {
     pub presence: HashMap<String, Presence>,
     /// Whether account privacy disables direct-chat read receipts.
     pub account_receipts_off: bool,
+    /// The group invite link being previewed or joined.
+    pub invite: Option<crate::model::GroupInvite>,
     avatars: HashMap<String, Option<PathBuf>>,
     avatar_requests: HashSet<String>,
     /// Full-size profile pictures for info dialogs.
@@ -458,6 +460,7 @@ impl App {
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
+            invite: None,
             avatars: HashMap::new(),
             avatar_requests: HashSet::new(),
             avatars_full: HashMap::new(),
@@ -1465,6 +1468,44 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::InvitePreview { code, result } => {
+                    use crate::model::InviteState;
+                    if let Some(invite) = self.invite.as_mut().filter(|invite| invite.code == code)
+                    {
+                        invite.state = match result {
+                            Ok(info) => InviteState::Ready(info),
+                            Err(error) => InviteState::Failed(error),
+                        };
+                    }
+                }
+                Event::InviteJoined { code, result } => {
+                    if self
+                        .invite
+                        .as_ref()
+                        .is_some_and(|invite| invite.code == code)
+                    {
+                        match result {
+                            Ok((id, pending)) => {
+                                self.invite = None;
+                                if self.dialog == Some(Dialog::JoinGroup) {
+                                    self.dialog = None;
+                                }
+                                if pending {
+                                    self.toast(
+                                        "Request sent. An admin must approve it before you join.",
+                                    );
+                                } else {
+                                    self.actions.push(Action::OpenChat(id));
+                                }
+                            }
+                            Err(error) => {
+                                if let Some(invite) = self.invite.as_mut() {
+                                    invite.state = crate::model::InviteState::Failed(error);
+                                }
+                            }
+                        }
+                    }
+                }
                 Event::ContactReady { id, name } => {
                     self.new_contact_pending = false;
                     if self.dialog == Some(Dialog::NewContact) {
@@ -2425,7 +2466,14 @@ impl App {
                 }
             }
             Action::OpenUrl(url) => {
-                if let Some(url) = crate::safety::external_url(&url) {
+                if let Some(code) = crate::safety::group_invite_code(&url) {
+                    self.invite = Some(crate::model::GroupInvite {
+                        code: code.clone(),
+                        state: crate::model::InviteState::Loading,
+                    });
+                    self.dialog = Some(Dialog::JoinGroup);
+                    self.backend.send(Command::PreviewInvite(code));
+                } else if let Some(url) = crate::safety::external_url(&url) {
                     ctx.open_url(egui::OpenUrl::new_tab(url));
                 } else {
                     self.toast_error("This link type cannot be opened from ZapFast");
@@ -2832,6 +2880,7 @@ impl App {
             Action::CloseDialog => {
                 self.clear_chat_lock_entry();
                 self.dialog = None;
+                self.invite = None;
                 self.forward_search.clear();
                 self.contact_edit = None;
                 self.refocus_composer(ctx);
@@ -2872,6 +2921,22 @@ impl App {
                 self.chat_filter = filter;
                 self.show_archived = false;
                 self.unread_kept.clear();
+            }
+            Action::JoinGroup => {
+                use crate::model::InviteState;
+                if let Some(invite) = self.invite.as_mut()
+                    && let InviteState::Ready(info) = &invite.state
+                {
+                    if self.chats.iter().any(|chat| chat.id == info.id) {
+                        let id = info.id.clone();
+                        self.invite = None;
+                        self.dialog = None;
+                        self.actions.push(Action::OpenChat(id));
+                    } else {
+                        invite.state = InviteState::Joining(info.clone());
+                        self.backend.send(Command::JoinInvite(invite.code.clone()));
+                    }
+                }
             }
             Action::ShowArchived(show) => {
                 if self.locked_folder {
@@ -4098,6 +4163,41 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn an_invite_link_is_previewed_and_joined_inside_the_app() {
+        use crate::model::{InviteInfo, InviteState};
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let ctx = egui::Context::default();
+        app.apply(
+            Action::OpenUrl("https://chat.whatsapp.com/AbCdEf1234567890XyZ".into()),
+            &ctx,
+        );
+        assert_eq!(app.dialog, Some(Dialog::JoinGroup));
+        assert!(matches!(
+            commands.try_recv(),
+            Ok(Command::PreviewInvite(code)) if code == "AbCdEf1234567890XyZ"
+        ));
+        let info = InviteInfo {
+            id: "1@g.us".into(),
+            subject: "Club".into(),
+            description: None,
+            members: 3,
+            approval: false,
+        };
+        app.invite.as_mut().unwrap().state = InviteState::Ready(info);
+        app.apply(Action::JoinGroup, &ctx);
+        assert!(matches!(commands.try_recv(), Ok(Command::JoinInvite(_))));
+        assert!(matches!(
+            app.invite.as_ref().unwrap().state,
+            InviteState::Joining(_)
+        ));
+        // A second click while joining sends nothing more.
+        app.apply(Action::JoinGroup, &ctx);
+        assert!(commands.try_recv().is_err());
     }
 
     #[test]

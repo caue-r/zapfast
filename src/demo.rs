@@ -1468,6 +1468,21 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "delete-chat" => {
                 app.dialog = app.open_chat.clone().map(Dialog::ConfirmDeleteChat);
             }
+            "invite" => {
+                app.invite = Some(crate::model::GroupInvite {
+                    code: "DemoInviteCode123".into(),
+                    state: crate::model::InviteState::Ready(crate::model::InviteInfo {
+                        id: "120363000000000000@g.us".into(),
+                        subject: "Analytical Engine Club 🛠️".into(),
+                        description: Some(
+                            "Notes, diagrams and bad puns about difference engines.".into(),
+                        ),
+                        members: 42,
+                        approval: true,
+                    }),
+                });
+                app.dialog = Some(Dialog::JoinGroup);
+            }
             "new-contact" => app.dialog = Some(Dialog::NewContact),
             "light" => {
                 app.settings.theme = ThemeChoice::Light;
@@ -2807,6 +2822,7 @@ mod tests {
             "unlink",
             "toasts",
             "delete-chat",
+            "invite",
             "new-contact",
             "light",
             "archived",

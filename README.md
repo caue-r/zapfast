@@ -179,7 +179,9 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **Consistent names.** Use names from your address book or public WhatsApp
   profile names across chats, replies, mentions, and notifications.
 - **Groups.** See members, sender names, and sender pictures. Announcement
-  groups are read-only for non-admins.
+  groups are read-only for non-admins. Clicking a `chat.whatsapp.com` invite
+  link shows the group's name, size, and description, and joins it (or sends a
+  join request when admins approve members) without leaving ZapFast.
 - **Presence.** See online, last-seen, and typing status, and send your typing
   status. Like WhatsApp Web, ZapFast shows you as online only while its window
   is focused, and goes offline ten seconds after you switch away or hide it to

@@ -698,6 +698,34 @@ pub enum Dialog {
         message: String,
         button: usize,
     },
+    /// Previews a group invite link before joining.
+    JoinGroup,
+}
+
+/// A group invite link being previewed or joined.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupInvite {
+    pub code: String,
+    pub state: InviteState,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InviteState {
+    Loading,
+    Ready(InviteInfo),
+    Joining(InviteInfo),
+    Failed(String),
+}
+
+/// What an invite link says about its group, without joining it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InviteInfo {
+    pub id: ChatId,
+    pub subject: String,
+    pub description: Option<String>,
+    pub members: usize,
+    /// Admins approve new members before they join.
+    pub approval: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -887,6 +915,8 @@ pub enum Action {
     SetChatFilter(ChatFilter),
     /// Shows or leaves the archived chats.
     ShowArchived(bool),
+    /// Joins the group of the invite being previewed.
+    JoinGroup,
     /// A chat opened from the main list, kept there under the Unread filter.
     KeepUnread(ChatId),
     FocusSearch,
