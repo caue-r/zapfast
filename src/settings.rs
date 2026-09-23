@@ -363,6 +363,10 @@ pub struct Settings {
     pub names_from_contacts: bool,
     /// Voice and audio playback speed multiplier.
     pub voice_speed: f32,
+    /// Pause other apps' media while recording a voice message.
+    pub pause_media_while_recording: bool,
+    /// Pause other apps' media while a voice or audio message plays.
+    pub pause_media_while_playing: bool,
     /// Also add saved contacts to the phone's address book.
     pub save_contacts_to_phone: bool,
     /// Legacy plaintext code, accepted once and rewritten as a verifier.
@@ -408,6 +412,8 @@ impl Default for Settings {
             names_from_contacts: true,
             save_contacts_to_phone: true,
             voice_speed: 1.0,
+            pause_media_while_recording: true,
+            pause_media_while_playing: true,
             chat_lock_code: None,
             chat_lock_code_hash: None,
             chat_lock_hint_dismissed: false,

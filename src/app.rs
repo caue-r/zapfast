@@ -261,6 +261,10 @@ pub struct App {
     pub player: Player,
     /// Active voice recorder.
     pub recording: Option<Recorder>,
+    /// Keeps other apps' music paused while recording or playing audio.
+    media_hold: Option<crate::media_pause::Hold>,
+    /// Only the real app pauses other apps' media, never tests or demos.
+    pauses_media: bool,
     /// Image currently shown in the native preview.
     pub image_preview: Option<PreviewState>,
     /// Voice messages with a sent played receipt.
@@ -400,6 +404,7 @@ impl App {
         crate::proxy::configure(&settings.proxy);
         let backend = Backend::spawn(dirs.clone(), waker.clone());
         let mut app = Self::with_backend(dirs, settings, backend, waker.clone());
+        app.pauses_media = true;
         app.custom_themes.enable_desktop_themes();
         app.load_custom_themes();
         if options.tray {
@@ -520,6 +525,8 @@ impl App {
             pending: Vec::new(),
             player: Player::new(waker.clone()),
             recording: None,
+            media_hold: None,
+            pauses_media: false,
             image_preview: None,
             played_told: HashSet::new(),
             copy_rows: Default::default(),
@@ -3627,6 +3634,18 @@ impl App {
         self.tick(ctx);
         self.tick_audio();
         self.apply_actions(ctx);
+        self.hold_media();
+    }
+
+    /// Pauses other apps' music while recording or playing audio, as the
+    /// settings allow, and resumes it once neither needs quiet.
+    fn hold_media(&mut self) {
+        let wanted = self.pauses_media
+            && (self.recording.is_some() && self.settings.pause_media_while_recording
+                || self.player.is_playing() && self.settings.pause_media_while_playing);
+        if wanted != self.media_hold.is_some() {
+            self.media_hold = wanted.then(crate::media_pause::hold);
+        }
     }
 
     /// Polls audio state and schedules repaints while it changes.
@@ -3979,6 +3998,11 @@ impl App {
     pub fn shutdown(&mut self) {
         self.save_state();
         self.flush_open_draft();
+        self.recording = None;
+        // A background resume would die with the process.
+        if self.media_hold.take().is_some() {
+            crate::media_pause::settle(Duration::from_secs(2));
+        }
         self.backend.shutdown();
     }
 

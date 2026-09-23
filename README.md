@@ -127,7 +127,12 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   in the chat. The speed chip cycles between 1x, 1.5x, and 2x, and the
   message menu offers 1x, 1.25x, 1.5x, 1.75x, and 2x, keeping the speaker's
   pitch; the last choice applies to later messages. The app normalizes quiet
-  recordings and handles OGG/Opus without external tools.
+  recordings and handles OGG/Opus without external tools. On Linux and
+  Windows, music and other media playing in other apps pause while you record
+  or play a voice message and resume afterwards; only players that were
+  playing are resumed. Two switches in Settings turn this off for recording
+  and for playback. Linux uses MPRIS, so any player that implements it works;
+  macOS has no public API for this, so the switches are hidden there.
 - **Send messages.** Press Enter to send text and Shift+Enter for a new line.
   You can swap these keys in Settings. The composer is focused when you open
   or return to a conversation; invoking search keeps focus in search, and
