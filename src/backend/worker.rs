@@ -580,7 +580,8 @@ struct ParsedChat {
     id: String,
     name: Option<String>,
     unread: Option<u32>,
-    archived: bool,
+    /// `None` means the history chunk omitted archive metadata.
+    archived: Option<bool>,
     pinned_at: Option<i64>,
     /// Outer None means the history chunk omitted mute metadata.
     muted_until: Option<Option<i64>>,
@@ -1770,9 +1771,13 @@ impl Worker {
             }
             E::ArchiveUpdate(update) => {
                 let chat = self.canonical(&update.jid);
-                let _ = self
-                    .archive
-                    .set_archived(&chat, update.action.archived.unwrap_or(false));
+                // The update can arrive before history creates the chat.
+                self.ensure_chat(&chat, None);
+                let _ = self.archive.set_archived_at(
+                    &chat,
+                    update.action.archived.unwrap_or(false),
+                    update.timestamp.timestamp_millis(),
+                );
                 self.emit_chat(&chat);
             }
             E::PinUpdate(update) => {
@@ -2808,7 +2813,9 @@ impl Worker {
                 row.group_subject_known = subject_known;
                 row.last_activity = chat.last_activity;
                 row.unread = existing.as_ref().map_or(0, |existing| existing.unread);
-                row.archived = chat.archived;
+                row.archived = chat
+                    .archived
+                    .unwrap_or_else(|| existing.as_ref().is_some_and(|row| row.archived));
                 row.pinned_at = chat
                     .pinned_at
                     .unwrap_or_else(|| existing.as_ref().map_or(0, |row| row.pinned_at));
@@ -6348,7 +6355,7 @@ fn parse_conversation(conversation: wa::Conversation) -> ParsedChat {
         id: conversation.id.clone(),
         name: non_empty(&conversation.display_name).or_else(|| non_empty(&conversation.name)),
         unread: conversation.unread_count,
-        archived: conversation.archived.unwrap_or(false),
+        archived: conversation.archived,
         pinned_at: conversation.pinned.map(|when| i64::from(when) * 1000),
         muted_until: conversation.mute_end_time.map(|end| {
             // Zero explicitly clears a history mute; a wrapped -1 means
@@ -8084,6 +8091,65 @@ mod receipt_tests {
         assert!(worker.archive.chat(PEER).unwrap().unwrap().locked);
     }
 
+    #[tokio::test]
+    async fn archive_sync_before_history_survives_replays() {
+        let (mut worker, _events, _inbox, _wa) = worker();
+        let time = whatsapp_rust::wacore::time::now_utc();
+        let archive = wa_events::ArchiveUpdate::builder()
+            .jid(PEER.parse().unwrap())
+            .timestamp(time)
+            .from_full_sync(true)
+            .action(Box::new(wa::sync_action_value::ArchiveChatAction {
+                archived: Some(true),
+                ..Default::default()
+            }))
+            .build();
+        worker
+            .handle_wa_event(Arc::new(wa_events::Event::ArchiveUpdate(archive)))
+            .await;
+        assert!(
+            worker
+                .archive
+                .chat(PEER)
+                .unwrap()
+                .expect("sync creates the chat")
+                .archived
+        );
+        // Neither missing nor stale history metadata unarchives the chat.
+        worker.apply_history(history(0), true);
+        assert!(worker.archive.chat(PEER).unwrap().unwrap().archived);
+        let mut stale = history(0);
+        stale.chats[0].archived = Some(false);
+        worker.apply_history(stale, true);
+        assert!(worker.archive.chat(PEER).unwrap().unwrap().archived);
+        // Without an app-state version, history still decides.
+        let other = history(0);
+        let id = other.chats[0].id.clone();
+        worker
+            .archive
+            .set_archived_at(&id, false, time.timestamp_millis() + 1)
+            .unwrap();
+        assert!(!worker.archive.chat(PEER).unwrap().unwrap().archived);
+    }
+
+    #[test]
+    fn history_archive_state_applies_until_the_phone_sends_its_own() {
+        let (mut worker, _events, _inbox, _wa) = worker();
+        let mut archived = history(0);
+        archived.chats[0].archived = Some(true);
+        worker.apply_history(archived, true);
+        assert!(worker.archive.chat(PEER).unwrap().unwrap().archived);
+        worker.apply_history(history(0), true);
+        assert!(
+            worker.archive.chat(PEER).unwrap().unwrap().archived,
+            "a chunk without archive metadata keeps the state"
+        );
+        let mut unarchived = history(0);
+        unarchived.chats[0].archived = Some(false);
+        worker.apply_history(unarchived, true);
+        assert!(!worker.archive.chat(PEER).unwrap().unwrap().archived);
+    }
+
     #[test]
     fn early_privacy_id_mute_reaches_the_canonical_chat_without_a_duplicate() {
         let (mut worker, events, _inbox, _wa) = worker();
@@ -8509,7 +8575,7 @@ mod chat_removal_tests {
                 id: chat.to_owned(),
                 name: Some("Somebody".into()),
                 unread: None,
-                archived: false,
+                archived: None,
                 pinned_at: None,
                 muted_until: None,
                 locked: None,
