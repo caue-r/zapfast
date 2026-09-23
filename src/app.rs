@@ -2673,6 +2673,11 @@ impl App {
                     preview.fit();
                 }
             }
+            Action::ImageActualSize => {
+                if let Some(preview) = &mut self.image_preview {
+                    preview.actual_size();
+                }
+            }
             Action::CloseImagePreview => {
                 self.image_preview = None;
                 self.refocus_composer(ctx);

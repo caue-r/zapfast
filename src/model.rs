@@ -842,6 +842,8 @@ pub enum Action {
     /// Open externally button inside the preview.
     PreviewImage(PathBuf),
     ZoomImageIn,
+    /// Shows the previewed image at its original size.
+    ImageActualSize,
     ZoomImageOut,
     FitImage,
     CloseImagePreview,
