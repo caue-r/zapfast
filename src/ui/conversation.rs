@@ -83,7 +83,10 @@ fn empty(app: &mut App, ui: &mut egui::Ui) {
         ui.painter().text(
             center + vec2(0.0, 56.0),
             Align2::CENTER_CENTER,
-            super::keys::label("Ctrl+K to search · ? for keyboard shortcuts"),
+            super::keys::label(
+                crate::i18n::gettext(app.locale, "Ctrl+K to search · ? for keyboard shortcuts")
+                    .as_ref(),
+            ),
             theme::regular(12.5),
             palette.dim,
         );
@@ -306,7 +309,10 @@ fn subtitle(app: &App, chat: &Chat) -> (String, Color32) {
         }
         if let Some(seen) = presence.last_seen {
             return (
-                format!("last seen {}", crate::util::chat_stamp(seen).to_lowercase()),
+                format!(
+                    "last seen {}",
+                    crate::util::chat_stamp(app.locale, seen).to_lowercase()
+                ),
                 palette.secondary,
             );
         }
@@ -899,9 +905,11 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     .margin(Margin::ZERO)
                                     .hint_text(
                                         egui::RichText::new(if app.pending.is_empty() {
-                                            "Type a message"
+                                            crate::i18n::gettext(app.locale, "Type a message")
+                                                .into_owned()
                                         } else {
-                                            "Add a caption"
+                                            crate::i18n::gettext(app.locale, "Add a caption")
+                                                .into_owned()
                                         })
                                         .color(palette.dim)
                                         .font(theme::regular(BODY_SIZE)),
@@ -1051,11 +1059,12 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 app.focus_composer = true;
             }
             if app.settings.show_shortcut_hints {
-                let hint = super::keys::label(if enter_sends {
-                    "Enter sends · Shift+Enter for a new line · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture"
+                let hint_text = if enter_sends {
+                    crate::i18n::gettext(app.locale, "Enter sends · Shift+Enter for a new line · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture")
                 } else {
-                    "Ctrl+Enter sends · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture"
-                });
+                    crate::i18n::gettext(app.locale, "Ctrl+Enter sends · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture")
+                };
+                let hint = super::keys::label(hint_text.as_ref());
                 ui.add_space(2.0);
                 ui.horizontal(|ui| {
                     if theme::icon_button(
@@ -1064,7 +1073,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                         13.0,
                         palette.dim,
                         palette.secondary,
-                        "Hide shortcut hints (restore in Settings)",
+                        crate::i18n::gettext(app.locale, "Hide shortcut hints (restore in Settings)").as_ref(),
                     )
                     .clicked()
                     {
@@ -1079,7 +1088,8 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             13.0,
                             palette.dim,
                             palette.secondary,
-                            &format!("All shortcuts ({})", super::keys::label("Ctrl+/")),
+                            &crate::i18n::gettext(app.locale, "All shortcuts ({})")
+                                .replace("{}", &super::keys::label("Ctrl+/")),
                         )
                         .clicked()
                         {
@@ -1174,6 +1184,7 @@ fn reply_strip(app: &mut App, ui: &mut egui::Ui, quoted: &Message) {
 /// App data needed while drawing a checked-out conversation.
 struct View<'a> {
     palette: Palette,
+    locale: crate::i18n::Locale,
     chat: &'a Chat,
     me: Option<&'a str>,
     auto_download: bool,
@@ -1225,6 +1236,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let keyboard_navigation = std::cell::Cell::new(false);
     let view = View {
         palette,
+        locale: app.locale,
         chat,
         me: app.me.as_deref(),
         auto_download: app.settings.auto_download,
@@ -1315,7 +1327,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 widgets::chip(
                                     ui,
                                     &palette,
-                                    &crate::util::day_label(message.timestamp),
+                                    &crate::util::day_label(app.locale, message.timestamp),
                                 );
                             });
                             ui.add_space(4.0);
@@ -2610,7 +2622,10 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         ui,
         &palette,
         Icon::Check,
-        &format!("Sent {}", crate::util::moment_stamp(message.timestamp)),
+        &format!(
+            "Sent {}",
+            crate::util::moment_stamp(view.locale, message.timestamp)
+        ),
     );
     if message.from_me {
         if message.delivered_at.is_some() || message.status == Delivery::Delivered {
@@ -2619,7 +2634,9 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
                 &palette,
                 Icon::CheckCheck,
                 &match message.delivered_at {
-                    Some(when) => format!("Delivered {}", crate::util::moment_stamp(when)),
+                    Some(when) => {
+                        format!("Delivered {}", crate::util::moment_stamp(view.locale, when))
+                    }
                     None => "Delivered".to_owned(),
                 },
             );
@@ -2635,7 +2652,9 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
                 &palette,
                 Icon::CheckCheck,
                 &match message.read_at {
-                    Some(when) => format!("{what} {}", crate::util::moment_stamp(when)),
+                    Some(when) => {
+                        format!("{what} {}", crate::util::moment_stamp(view.locale, when))
+                    }
                     None => what.to_owned(),
                 },
             );
