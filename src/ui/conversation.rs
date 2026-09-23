@@ -4545,10 +4545,12 @@ fn voice_player(
                     }
                 },
             }
+            let mut wave_middle = None;
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 let (rect, response) =
                     ui.allocate_exact_size(vec2(wave_width, bar_height), Sense::click());
+                wave_middle = Some(rect.center().y);
                 let pitch = 3.0;
                 let count = (rect.width() / pitch).floor() as usize;
                 let fraction = if status.total > Duration::ZERO {
@@ -4628,8 +4630,19 @@ fn voice_player(
                 // The label follows the click at once, faded until this
                 // clip actually plays at that speed.
                 let preparing = view.player.preparing_speed(&message.id);
-                let response =
-                    speed_pill(ui, view, vec2(chip, 20.0), speed, speed > 1.0, preparing);
+                // Reserve the chip's place in the row, then draw it level
+                // with the middle of the waveform rather than the whole row.
+                let size = vec2(chip, 20.0);
+                let (slot, _) = ui.allocate_exact_size(size, Sense::hover());
+                let at = Rect::from_center_size(
+                    egui::pos2(slot.center().x, wave_middle.unwrap_or(slot.center().y)),
+                    size,
+                );
+                let response = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(at), |ui| {
+                        speed_pill(ui, view, size, speed, speed > 1.0, preparing)
+                    })
+                    .inner;
                 ui.ctx().data_mut(|data| {
                     data.insert_temp(speed_chip_id(&view.chat.id, &message.id), response.rect);
                 });
