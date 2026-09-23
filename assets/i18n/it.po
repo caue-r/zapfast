@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:39+0200\n"
+"POT-Creation-Date: 2026-09-23 16:52+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Italian\n"
@@ -187,14 +187,18 @@ msgstr ""
 msgid "All shortcuts ({})"
 msgstr "Tutte le scorciatoie ({})"
 
-#: src/ui/conversation.rs:1450
+#: src/ui/conversation.rs:1453
 #, rust-format
 msgid "{} unread message"
 msgid_plural "{} unread messages"
 msgstr[0] "{} messaggio non letto"
 msgstr[1] "{} messaggi non letti"
 
-#: src/ui/dialogs.rs:1146
+#: src/ui/conversation.rs:3114 src/ui/message_info.rs:17
+msgid "Message info"
+msgstr "Info messaggio"
+
+#: src/ui/dialogs.rs:1151
 #, rust-format
 msgid "{} member"
 msgid_plural "{} members"
@@ -225,7 +229,9 @@ msgstr "Metti in pausa la musica durante la registrazione"
 msgid ""
 "Pause media players while you record a voice message and resume them "
 "afterwards."
-msgstr"Mette in pausa i lettori multimediali mentre registri un vocale e li riprende dopo."
+msgstr ""
+"Mette in pausa i lettori multimediali mentre registri un vocale e li "
+"riprende dopo."
 
 #: src/ui/settings.rs:187
 msgid "Pause music while playing voice messages"
@@ -235,7 +241,9 @@ msgstr "Metti in pausa la musica durante i messaggi vocali"
 msgid ""
 "Pause media players while a voice or audio message plays and resume them "
 "when it stops."
-msgstr"Mette in pausa i lettori multimediali mentre suona un vocale o un audio e li riprende alla fine."
+msgstr ""
+"Mette in pausa i lettori multimediali mentre suona un vocale o un audio e li "
+"riprende alla fine."
 
 #: src/ui/settings.rs:226
 msgid "Window"
@@ -315,3 +323,70 @@ msgstr "Codice sorgente"
 #, rust-format
 msgid "Built with love by {name}"
 msgstr "Fatto con amore da {name}"
+
+#: src/ui/message_info.rs:28
+msgid "Close"
+msgstr "Chiudi"
+
+#: src/ui/message_info.rs:44
+msgid "This message is no longer available."
+msgstr "Questo messaggio non è più disponibile."
+
+#: src/ui/message_info.rs:63
+msgid "Loading…"
+msgstr "Caricamento…"
+
+#: src/ui/message_info.rs:136
+msgid "Played"
+msgstr "Riprodotto"
+
+#: src/ui/message_info.rs:138
+msgid "Read"
+msgstr "Letto"
+
+#: src/ui/message_info.rs:143
+msgid "Delivered"
+msgstr "Consegnato"
+
+#: src/ui/message_info.rs:159
+msgid "Time not recorded"
+msgstr "Orario non registrato"
+
+#: src/ui/message_info.rs:181
+msgid ""
+"No receipts were recorded for this message. Details are available for "
+"messages sent from now on."
+msgstr ""
+"Per questo messaggio non è stata registrata nessuna conferma. I dettagli "
+"sono disponibili per i messaggi inviati da ora in poi."
+
+#: src/ui/message_info.rs:193
+msgid ""
+"Some receipts for this message were not recorded. Details are complete for "
+"messages sent from now on."
+msgstr ""
+"Alcune conferme di questo messaggio non sono state registrate. I dettagli "
+"sono completi per i messaggi inviati da ora in poi."
+
+#: src/ui/message_info.rs:209
+msgid "Played by"
+msgstr "Riprodotto da"
+
+#: src/ui/message_info.rs:218
+msgid "Read by"
+msgstr "Letto da"
+
+#: src/ui/message_info.rs:226
+msgid "Delivered to"
+msgstr "Consegnato a"
+
+#: src/ui/message_info.rs:236
+#, rust-format
+msgid "{} remaining"
+msgid_plural "{} remaining"
+msgstr[0] "{} in attesa"
+msgstr[1] "{} in attesa"
+
+#: src/ui/message_info.rs:264
+msgid "No one yet"
+msgstr "Ancora nessuno"

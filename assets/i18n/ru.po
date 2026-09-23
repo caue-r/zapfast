@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:39+0200\n"
+"POT-Creation-Date: 2026-09-23 16:52+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Russian\n"
@@ -187,7 +187,7 @@ msgstr "Скрыть подсказки сочетаний клавиш (вос�
 msgid "All shortcuts ({})"
 msgstr "Все сочетания клавиш ({})"
 
-#: src/ui/conversation.rs:1450
+#: src/ui/conversation.rs:1453
 #, rust-format
 msgid "{} unread message"
 msgid_plural "{} unread messages"
@@ -195,7 +195,11 @@ msgstr[0] "{} непрочитанное сообщение"
 msgstr[1] "{} непрочитанных сообщения"
 msgstr[2] "{} непрочитанных сообщений"
 
-#: src/ui/dialogs.rs:1146
+#: src/ui/conversation.rs:3114 src/ui/message_info.rs:17
+msgid "Message info"
+msgstr "Данные сообщения"
+
+#: src/ui/dialogs.rs:1151
 #, rust-format
 msgid "{} member"
 msgid_plural "{} members"
@@ -227,7 +231,9 @@ msgstr "Ставить музыку на паузу во время записи
 msgid ""
 "Pause media players while you record a voice message and resume them "
 "afterwards."
-msgstr"Ставить плееры на паузу во время записи голосового сообщения и продолжать после."
+msgstr ""
+"Ставить плееры на паузу во время записи голосового сообщения и продолжать "
+"после."
 
 #: src/ui/settings.rs:187
 msgid "Pause music while playing voice messages"
@@ -237,7 +243,9 @@ msgstr "Ставить музыку на паузу при прослушива�
 msgid ""
 "Pause media players while a voice or audio message plays and resume them "
 "when it stops."
-msgstr"Ставить плееры на паузу, пока играет голосовое или аудиосообщение, и продолжать после."
+msgstr ""
+"Ставить плееры на паузу, пока играет голосовое или аудиосообщение, и "
+"продолжать после."
 
 #: src/ui/settings.rs:226
 msgid "Window"
@@ -317,3 +325,71 @@ msgstr "Исходный код"
 #, rust-format
 msgid "Built with love by {name}"
 msgstr "Сделано с любовью: {name}"
+
+#: src/ui/message_info.rs:28
+msgid "Close"
+msgstr "Закрыть"
+
+#: src/ui/message_info.rs:44
+msgid "This message is no longer available."
+msgstr "Это сообщение больше недоступно."
+
+#: src/ui/message_info.rs:63
+msgid "Loading…"
+msgstr "Загрузка…"
+
+#: src/ui/message_info.rs:136
+msgid "Played"
+msgstr "Прослушано"
+
+#: src/ui/message_info.rs:138
+msgid "Read"
+msgstr "Прочитано"
+
+#: src/ui/message_info.rs:143
+msgid "Delivered"
+msgstr "Доставлено"
+
+#: src/ui/message_info.rs:159
+msgid "Time not recorded"
+msgstr "Время не записано"
+
+#: src/ui/message_info.rs:181
+msgid ""
+"No receipts were recorded for this message. Details are available for "
+"messages sent from now on."
+msgstr ""
+"Для этого сообщения отчёты не записывались. Подробности доступны для "
+"сообщений, отправленных с этого момента."
+
+#: src/ui/message_info.rs:193
+msgid ""
+"Some receipts for this message were not recorded. Details are complete for "
+"messages sent from now on."
+msgstr ""
+"Некоторые отчёты для этого сообщения не записаны. Для сообщений, "
+"отправленных с этого момента, подробности полные."
+
+#: src/ui/message_info.rs:209
+msgid "Played by"
+msgstr "Прослушали"
+
+#: src/ui/message_info.rs:218
+msgid "Read by"
+msgstr "Прочитали"
+
+#: src/ui/message_info.rs:226
+msgid "Delivered to"
+msgstr "Доставлено"
+
+#: src/ui/message_info.rs:236
+#, rust-format
+msgid "{} remaining"
+msgid_plural "{} remaining"
+msgstr[0] "ещё {}"
+msgstr[1] "ещё {}"
+msgstr[2] "ещё {}"
+
+#: src/ui/message_info.rs:264
+msgid "No one yet"
+msgstr "Пока никто"

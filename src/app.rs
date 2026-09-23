@@ -220,6 +220,10 @@ pub struct App {
     pub presence: HashMap<String, Presence>,
     /// Whether account privacy disables direct-chat read receipts.
     pub account_receipts_off: bool,
+    /// Receipts of the message whose "Message info" is open.
+    pub message_receipts: Option<crate::model::MessageReceipts>,
+    /// The group message the backend is following receipts for.
+    pub(crate) receipts_watch: Option<(ChatId, String)>,
     /// The group invite link being previewed or joined.
     pub invite: Option<crate::model::GroupInvite>,
     /// Where the unread messages began when the open chat was opened.
@@ -502,6 +506,8 @@ impl App {
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
+            message_receipts: None,
+            receipts_watch: None,
             invite: None,
             unread_divider: None,
             selection: None,
@@ -1556,6 +1562,14 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::Receipts(receipts) => {
+                    // A late answer for a dialog that has since closed is stale.
+                    if self.receipts_watch.as_ref().is_some_and(|(chat, message)| {
+                        *chat == receipts.chat && *message == receipts.message
+                    }) {
+                        self.message_receipts = Some(receipts);
+                    }
+                }
                 Event::ChatSoundPicked { chat, path } => {
                     crate::notify::play_sound(crate::settings::NotificationSound::Custom(
                         path.clone(),
@@ -3640,6 +3654,7 @@ impl App {
         self.tick_audio();
         self.apply_actions(ctx);
         self.hold_media();
+        self.follow_receipts();
     }
 
     /// Pauses other apps' music while recording or playing audio, as the
@@ -3651,6 +3666,25 @@ impl App {
         if wanted != self.media_hold.is_some() {
             self.media_hold = wanted.then(crate::media_pause::hold);
         }
+    }
+
+    /// Keeps the backend following receipts for exactly the group message
+    /// whose "Message info" is open. A direct message's times are on its row.
+    fn follow_receipts(&mut self) {
+        let wanted = match &self.dialog {
+            Some(Dialog::MessageInfo { chat, message })
+                if crate::model::ChatKind::from_id(chat) == crate::model::ChatKind::Group =>
+            {
+                Some((chat.clone(), message.clone()))
+            }
+            _ => None,
+        };
+        if wanted == self.receipts_watch {
+            return;
+        }
+        self.message_receipts = None;
+        self.receipts_watch = wanted.clone();
+        self.backend.send(Command::WatchReceipts(wanted));
     }
 
     /// Polls audio state and schedules repaints while it changes.
@@ -4625,6 +4659,62 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn message_info_follows_a_group_messages_receipts_only_while_open() {
+        let mut app = app();
+        let (backend, mut commands, events) = Backend::recording_with_events();
+        app.backend = backend;
+        let ctx = egui::Context::default();
+        let group = "123-456@g.us";
+        let watches = |commands: &mut tokio::sync::mpsc::UnboundedReceiver<Command>| {
+            std::iter::from_fn(|| commands.try_recv().ok())
+                .filter_map(|command| match command {
+                    Command::WatchReceipts(watch) => Some(watch),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let receipts = |message: &str| crate::model::MessageReceipts {
+            chat: group.into(),
+            message: message.into(),
+            recipients: Vec::new(),
+        };
+        app.apply(
+            Action::ShowDialog(Dialog::MessageInfo {
+                chat: group.into(),
+                message: "m".into(),
+            }),
+            &ctx,
+        );
+        app.follow_receipts();
+        app.follow_receipts();
+        assert_eq!(
+            watches(&mut commands),
+            [Some((group.to_owned(), "m".to_owned()))]
+        );
+        // Receipts for another message, from a dialog opened earlier, are stale.
+        events.send(Event::Receipts(receipts("other"))).unwrap();
+        app.handle_events();
+        assert!(app.message_receipts.is_none());
+        events.send(Event::Receipts(receipts("m"))).unwrap();
+        app.handle_events();
+        assert_eq!(app.message_receipts, Some(receipts("m")));
+        app.apply(Action::CloseDialog, &ctx);
+        app.follow_receipts();
+        assert_eq!(watches(&mut commands), [None]);
+        assert!(app.message_receipts.is_none());
+        // A direct message's times are on its row: nothing to follow.
+        app.apply(
+            Action::ShowDialog(Dialog::MessageInfo {
+                chat: "1@s.whatsapp.net".into(),
+                message: "m".into(),
+            }),
+            &ctx,
+        );
+        app.follow_receipts();
+        assert!(watches(&mut commands).is_empty());
     }
 
     #[test]

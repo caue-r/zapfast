@@ -3100,38 +3100,24 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
             crate::util::moment_stamp(view.locale, message.timestamp)
         ),
     );
-    if message.from_me {
-        if message.delivered_at.is_some() || message.status == Delivery::Delivered {
-            widgets::menu_info(
-                ui,
-                &palette,
-                Icon::CheckCheck,
-                &match message.delivered_at {
-                    Some(when) => {
-                        format!("Delivered {}", crate::util::moment_stamp(view.locale, when))
-                    }
-                    None => "Delivered".to_owned(),
-                },
-            );
-        }
-        if matches!(message.status, Delivery::Read | Delivery::Played) {
-            let what = if message.status == Delivery::Played {
-                "Played"
-            } else {
-                "Read"
-            };
-            widgets::menu_info(
-                ui,
-                &palette,
-                Icon::CheckCheck,
-                &match message.read_at {
-                    Some(when) => {
-                        format!("{what} {}", crate::util::moment_stamp(view.locale, when))
-                    }
-                    None => what.to_owned(),
-                },
-            );
-        }
+    // Delivery and read times, per member in a group, live in "Message info".
+    if message.from_me
+        && !matches!(message.content, Content::Revoked)
+        && !matches!(
+            message.status,
+            Delivery::None | Delivery::Pending | Delivery::Failed
+        )
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Info),
+            &crate::i18n::gettext(view.locale, "Message info"),
+        )
+    {
+        actions.push(Action::ShowDialog(Dialog::MessageInfo {
+            chat: chat.clone(),
+            message: message.id.clone(),
+        }));
     }
     // The id helps when looking a message up for a bug report. Clicking
     // "Sent" used to copy it without saying so.

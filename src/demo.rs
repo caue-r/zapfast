@@ -1150,6 +1150,57 @@ fn poll_sample(app: &mut App, voted: bool, results: bool) {
     }
 }
 
+/// "Message info" for our message in a bigger group: some members read it,
+/// some only have it, and the rest have not received it yet. Without a saved
+/// audience, the dialog explains that earlier receipts are unknown.
+fn message_info_sample(app: &mut App, recorded: bool) {
+    let chat = SAMPLES[1].id;
+    let now = crate::util::now();
+    app.open_chat = Some(chat.into());
+    app.typing.clear();
+    let c = app.conversations.get_mut(chat).unwrap();
+    let message = c
+        .messages
+        .iter_mut()
+        .rev()
+        .find(|m| m.from_me && matches!(m.content, Content::Text { .. }))
+        .unwrap();
+    message.status = crate::model::Delivery::Delivered;
+    let id = message.id.clone();
+    let recipient = |id: &str, delivered: Option<i64>, read: Option<i64>| crate::model::Recipient {
+        id: id.into(),
+        expected: true,
+        delivered_at: delivered.map(|minutes| now - minutes * 60),
+        read_at: read.map(|minutes| now - minutes * 60),
+        played_at: None,
+    };
+    let recipients = if recorded {
+        vec![
+            recipient("491701111111@s.whatsapp.net", Some(24), Some(3)),
+            recipient("491702222222@s.whatsapp.net", Some(24), Some(11)),
+            recipient(SAMPLES[2].id, Some(23), Some(19)),
+            recipient("491703333333@s.whatsapp.net", Some(22), None),
+            recipient(SAMPLES[4].id, Some(9), None),
+            recipient("12025550137@s.whatsapp.net", Some(20), None),
+            recipient("491704444444@s.whatsapp.net", None, None),
+            recipient("491705555555@s.whatsapp.net", None, None),
+            recipient("491706666666@s.whatsapp.net", None, None),
+        ]
+    } else {
+        Vec::new()
+    };
+    app.message_receipts = Some(crate::model::MessageReceipts {
+        chat: chat.into(),
+        message: id.clone(),
+        recipients,
+    });
+    app.receipts_watch = Some((chat.into(), id.clone()));
+    app.dialog = Some(Dialog::MessageInfo {
+        chat: chat.into(),
+        message: id,
+    });
+}
+
 pub fn apply_flags(app: &mut App, page: Option<&str>) {
     let Some(page) = page else {
         return;
@@ -1246,6 +1297,25 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "keyring" => {
                 unlink(app);
                 app.link = LinkStatus::Failed("The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed".into());
+            }
+            "message-info" => message_info_sample(app, true),
+            "message-info-unknown" => message_info_sample(app, false),
+            "message-info-direct" => {
+                let chat = SAMPLES[0].id;
+                let c = app.conversations.get_mut(chat).unwrap();
+                let message = c
+                    .messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| m.from_me && matches!(m.content, Content::Text { .. }))
+                    .unwrap();
+                message.status = crate::model::Delivery::Read;
+                message.delivered_at = Some(message.timestamp + 4);
+                message.read_at = Some(message.timestamp + 3 * 60);
+                app.dialog = Some(Dialog::MessageInfo {
+                    chat: chat.into(),
+                    message: message.id.clone(),
+                });
             }
             "disappearing" => {
                 let chat = app
@@ -2828,6 +2898,9 @@ mod tests {
             "poll-empty",
             "poll-voted",
             "poll-results",
+            "message-info",
+            "message-info-unknown",
+            "message-info-direct",
             "empty",
             "rtl",
             "disappearing",
@@ -3408,8 +3481,9 @@ mod tests {
             .unwrap_or_default()
     }
 
-    /// The sent, delivered, and read rows only inform. The message id is
-    /// copied by a row that says so, not by clicking "Sent".
+    /// The sent row only informs; delivery and read times open from "Message
+    /// info". The message id is copied by a row that says so, not by clicking
+    /// "Sent".
     #[test]
     fn message_status_rows_are_not_actions() {
         use egui::accesskit::Role;
@@ -3427,10 +3501,9 @@ mod tests {
                 .unwrap_or_else(|| panic!("no {prefix} row"))
                 .clone()
         };
-        for status in ["Sent ", "Delivered ", "Read "] {
-            let (label, role, _) = find(status);
-            assert_eq!(role, Role::Label, "{label} is information, not a button");
-        }
+        let (label, role, _) = find("Sent ");
+        assert_eq!(role, Role::Label, "{label} is information, not a button");
+        assert_eq!(find("Message info").1, Role::Button);
         assert_eq!(find("Copy message ID").1, Role::Button);
 
         let click = |app: &mut App, pos: egui::Pos2| {

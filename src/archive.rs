@@ -272,6 +272,7 @@ impl Archive {
                 ))?;
             }
         }
+        Self::prune_receipts(&connection)?;
         Ok(Self { connection })
     }
 
