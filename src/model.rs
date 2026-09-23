@@ -733,12 +733,14 @@ pub enum SidebarDisplayMode {
     Hidden,
 }
 
-/// Imported sticker pack stored as a named WebP directory.
+/// Sticker pack stored as a folder of WebP files, imported or made here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StickerPack {
     pub name: String,
     pub dir: PathBuf,
     pub stickers: Vec<PathBuf>,
+    /// Put together in ZapFast, so stickers can be filed into it.
+    pub local: bool,
 }
 
 /// GIF search failure.
@@ -1102,8 +1104,18 @@ pub enum Action {
     ImportStickerUrl(String),
     /// Selects and imports a .wastickers or zip file.
     PickStickerArchive,
-    /// Deletes an imported pack directory.
+    /// Deletes a pack directory.
     DeleteStickerPack(PathBuf),
+    /// Creates a local sticker pack.
+    CreateStickerPack(String),
+    /// Filters the picker by one local pack, or shows everything when `None`.
+    SelectStickerPack(Option<PathBuf>),
+    /// Files a sticker into a local pack, or takes it out of it.
+    SetStickerPack {
+        pack: PathBuf,
+        sticker: PathBuf,
+        member: bool,
+    },
     /// Opens the prefilled contact-name editor.
     EditContact(String),
     /// Saves a contact through WhatsApp contact sync. `first` is the short

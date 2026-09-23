@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 19:43+0200\n"
+"POT-Creation-Date: 2026-09-23 20:14+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,7 +19,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/model.rs:70
+#: src/model.rs:70 src/ui/picker.rs:1166
 msgid "All"
 msgstr ""
 
@@ -428,17 +428,17 @@ msgstr[1] ""
 msgid "No one yet"
 msgstr ""
 
-#: src/app.rs:961
+#: src/app.rs:969
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr ""
 
-#: src/app.rs:3461 src/ui/labels.rs:294
+#: src/app.rs:3520 src/ui/labels.rs:294
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr ""
 
-#: src/app.rs:3939
+#: src/app.rs:3998
 msgid "This video opens in your system player"
 msgstr ""
 
@@ -550,4 +550,50 @@ msgstr ""
 
 #: src/ui/labels.rs:478
 msgid "Delete this label. Its chats keep their messages."
+msgstr ""
+
+#: src/ui/picker.rs:1180
+msgid "My packs"
+msgstr ""
+
+#: src/ui/picker.rs:1192
+msgid "Create this pack"
+msgstr ""
+
+#: src/ui/picker.rs:1207
+msgid "New pack…"
+msgstr ""
+
+#: src/ui/picker.rs:1289
+msgid "Loading your stickers…"
+msgstr ""
+
+#: src/ui/picker.rs:1291
+msgid ""
+"Recent stickers appear here. Right-click one to save it. To import a pack, "
+"paste a signal.art link or open a .wastickers file."
+msgstr ""
+
+#: src/ui/picker.rs:1325
+msgid "Nothing here yet. Right-click any sticker to add it to this pack."
+msgstr ""
+
+#: src/ui/picker.rs:1338
+msgid "Saved"
+msgstr ""
+
+#: src/ui/picker.rs:1355
+msgid "Remove this pack"
+msgstr ""
+
+#: src/ui/picker.rs:1369
+msgid "Recent"
+msgstr ""
+
+#: src/ui/picker.rs:1485
+msgid "Remove from saved"
+msgstr ""
+
+#: src/ui/picker.rs:1486
+msgid "Save sticker"
 msgstr ""

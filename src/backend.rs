@@ -15,6 +15,7 @@ use crate::paths::AppDirs;
 // Re-exported so the picker can detect pasted Signal pack links.
 mod read_sync;
 pub(crate) mod sticker_import;
+pub(crate) mod sticker_store;
 mod worker;
 pub use worker::{PINNED_CHATS, PLUS_PINNED_CHATS};
 
@@ -367,6 +368,17 @@ pub enum Command {
     /// Internal pack-import result. An empty error means the picker was canceled.
     StickerPackImported {
         result: Result<String, String>,
+    },
+    /// Creates an empty local sticker pack under the given name.
+    CreateStickerPack {
+        name: String,
+    },
+    /// Files a sticker into a local pack by its content, or takes it out.
+    /// The sticker's own file stays where it is.
+    SetStickerPack {
+        pack: PathBuf,
+        sticker: PathBuf,
+        member: bool,
     },
     /// Saves a name through contact sync. `first_name` is the short display
     /// name; `to_phone` also adds it to the phone's address book.

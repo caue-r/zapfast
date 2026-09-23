@@ -32,6 +32,15 @@ paste it into the field. You can also open a `.wastickers` file. Animated
 stickers remain animated and play on hover. Use the delete button beside a
 pack to remove it. Packs are stored as WebP files on your computer.
 
+You can also make packs of your own. Type a name in **New pack…** beside the
+grid and press Enter (or click **+**). Pick a pack in that sidebar to show only
+its stickers, and **All** to see everything again. Right-click any sticker and
+choose one of your packs in the menu to add it; a check mark shows the packs it
+is already in, and choosing a checked one takes it back out. A pack keeps its
+own copy of each sticker, named by the sticker's content, so the same picture
+is added once however many chats it came from. The **×** beside a pack deletes
+it and its copies, and leaves your saved stickers and other packs alone.
+
 ## Attachments
 
 Paste a picture, drop files on the window, or select them with the paperclip.

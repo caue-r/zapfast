@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 19:43+0200\n"
+"POT-Creation-Date: 2026-09-23 20:14+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Russian\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: src/model.rs:70
+#: src/model.rs:70 src/ui/picker.rs:1166
 msgid "All"
 msgstr "Все"
 
@@ -444,17 +444,17 @@ msgstr[2] "ещё {}"
 msgid "No one yet"
 msgstr "Пока никто"
 
-#: src/app.rs:961
+#: src/app.rs:969
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr "Метка «{name}» уже есть."
 
-#: src/app.rs:3461 src/ui/labels.rs:294
+#: src/app.rs:3520 src/ui/labels.rs:294
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "У вас {limit} меток — больше ZapFast не хранит."
 
-#: src/app.rs:3939
+#: src/app.rs:3998
 msgid "This video opens in your system player"
 msgstr "Это видео откроется в системном плеере"
 
@@ -572,3 +572,49 @@ msgstr "Переименовать или сменить цвет"
 #: src/ui/labels.rs:478
 msgid "Delete this label. Its chats keep their messages."
 msgstr "Удалить эту метку. Сообщения в её чатах останутся."
+
+#: src/ui/picker.rs:1180
+msgid "My packs"
+msgstr "Мои наборы"
+
+#: src/ui/picker.rs:1192
+msgid "Create this pack"
+msgstr "Создать этот набор"
+
+#: src/ui/picker.rs:1207
+msgid "New pack…"
+msgstr "Новый набор…"
+
+#: src/ui/picker.rs:1289
+msgid "Loading your stickers…"
+msgstr "Загрузка ваших стикеров…"
+
+#: src/ui/picker.rs:1291
+msgid ""
+"Recent stickers appear here. Right-click one to save it. To import a pack, "
+"paste a signal.art link or open a .wastickers file."
+msgstr "Здесь появляются недавние стикеры. Нажмите на стикер правой кнопкой, чтобы сохранить его. Чтобы импортировать набор, вставьте ссылку signal.art или откройте файл .wastickers."
+
+#: src/ui/picker.rs:1325
+msgid "Nothing here yet. Right-click any sticker to add it to this pack."
+msgstr "Здесь пока пусто. Нажмите на любой стикер правой кнопкой, чтобы добавить его в этот набор."
+
+#: src/ui/picker.rs:1338
+msgid "Saved"
+msgstr "Сохранённые"
+
+#: src/ui/picker.rs:1355
+msgid "Remove this pack"
+msgstr "Удалить этот набор"
+
+#: src/ui/picker.rs:1369
+msgid "Recent"
+msgstr "Недавние"
+
+#: src/ui/picker.rs:1485
+msgid "Remove from saved"
+msgstr "Убрать из сохранённых"
+
+#: src/ui/picker.rs:1486
+msgid "Save sticker"
+msgstr "Сохранить стикер"

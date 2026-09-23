@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 19:43+0200\n"
+"POT-Creation-Date: 2026-09-23 20:14+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: German\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/model.rs:70
+#: src/model.rs:70 src/ui/picker.rs:1166
 msgid "All"
 msgstr "Alle"
 
@@ -441,17 +441,17 @@ msgstr[1] "{} ausstehend"
 msgid "No one yet"
 msgstr "Noch niemand"
 
-#: src/app.rs:961
+#: src/app.rs:969
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr "Ein Label namens „{name}“ gibt es schon."
 
-#: src/app.rs:3461 src/ui/labels.rs:294
+#: src/app.rs:3520 src/ui/labels.rs:294
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "Du hast {limit} Labels, mehr hebt ZapFast nicht auf."
 
-#: src/app.rs:3939
+#: src/app.rs:3998
 msgid "This video opens in your system player"
 msgstr "Dieses Video öffnet sich im Systemplayer"
 
@@ -568,3 +568,49 @@ msgstr "Umbenennen oder umfärben"
 #: src/ui/labels.rs:478
 msgid "Delete this label. Its chats keep their messages."
 msgstr "Dieses Label löschen. Seine Chats behalten ihre Nachrichten."
+
+#: src/ui/picker.rs:1180
+msgid "My packs"
+msgstr "Meine Packs"
+
+#: src/ui/picker.rs:1192
+msgid "Create this pack"
+msgstr "Dieses Pack erstellen"
+
+#: src/ui/picker.rs:1207
+msgid "New pack…"
+msgstr "Neues Pack…"
+
+#: src/ui/picker.rs:1289
+msgid "Loading your stickers…"
+msgstr "Deine Sticker werden geladen…"
+
+#: src/ui/picker.rs:1291
+msgid ""
+"Recent stickers appear here. Right-click one to save it. To import a pack, "
+"paste a signal.art link or open a .wastickers file."
+msgstr "Hier erscheinen zuletzt verwendete Sticker. Klicke mit der rechten Maustaste auf einen, um ihn zu speichern. Um ein Pack zu importieren, füge einen signal.art-Link ein oder öffne eine .wastickers-Datei."
+
+#: src/ui/picker.rs:1325
+msgid "Nothing here yet. Right-click any sticker to add it to this pack."
+msgstr "Noch nichts hier. Klicke mit der rechten Maustaste auf einen Sticker, um ihn diesem Pack hinzuzufügen."
+
+#: src/ui/picker.rs:1338
+msgid "Saved"
+msgstr "Gespeichert"
+
+#: src/ui/picker.rs:1355
+msgid "Remove this pack"
+msgstr "Dieses Pack entfernen"
+
+#: src/ui/picker.rs:1369
+msgid "Recent"
+msgstr "Zuletzt verwendet"
+
+#: src/ui/picker.rs:1485
+msgid "Remove from saved"
+msgstr "Aus Gespeicherten entfernen"
+
+#: src/ui/picker.rs:1486
+msgid "Save sticker"
+msgstr "Sticker speichern"
