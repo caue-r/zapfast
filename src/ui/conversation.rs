@@ -239,12 +239,18 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     let width = (ui.available_width() - right_controls).max(80.0);
                                     ui.set_max_width(width);
                                     if subtitle.is_empty() {
-                                        ui.add_space(8.0);
-                                        widgets::rich_text(
-                                            ui,
-                                            &title,
-                                            theme::semibold(17.0),
-                                            palette.text,
+                                        // Center the name on the avatar.
+                                        ui.allocate_ui_with_layout(
+                                            vec2(width, 40.0),
+                                            Layout::left_to_right(Align::Center),
+                                            |ui| {
+                                                widgets::rich_text(
+                                                    ui,
+                                                    &title,
+                                                    theme::semibold(17.0),
+                                                    palette.text,
+                                                );
+                                            },
                                         );
                                     } else {
                                         // Align the name and subtitle with the avatar edges.
