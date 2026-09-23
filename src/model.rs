@@ -953,6 +953,17 @@ pub enum Action {
     SettingsChanged,
     /// Registers or removes the login entry that starts ZapFast in the tray.
     SetStartWithSystem(bool),
+    /// Sets the notification sound for groups (`true`) or other chats.
+    SetNotificationSound {
+        group: bool,
+        sound: crate::settings::NotificationSound,
+    },
+    /// Asks for an audio file to use as a notification sound.
+    PickNotificationSound {
+        group: bool,
+    },
+    /// Plays a notification sound once, as a preview.
+    PreviewSound(PathBuf),
     ZoomBy(f32),
     ResetZoom,
     /// Requests a pairing code for a phone number.

@@ -217,6 +217,9 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   device dismisses its outstanding notifications. On macOS, notifications use
   the installed ZapFast application's identity without an application chooser;
   unregistered development builds skip notifications if that identity is unavailable.
+  **Message sound** and **Group sound** in Settings choose the system's
+  notification sound, no sound, or an audio file (WAV, MP3, or OGG Vorbis)
+  that ZapFast plays itself.
 - **Update notices.** ZapFast checks GitHub once a day and shows a download
   link when a newer release is available. You can turn this off in Settings.
 - **Themes.** Light, dark, follow the system, or a local JSON palette. Native

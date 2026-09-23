@@ -3318,6 +3318,20 @@ impl Worker {
                     let _ = commands.send(Command::StickerPackImported { result });
                 });
             }
+            Command::PickNotificationSound { group } => {
+                let events = self.events.clone();
+                let waker = self.waker.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_title("Choose a notification sound")
+                        .add_filter("Audio", &["wav", "mp3", "ogg", "oga"])
+                        .pick_file()
+                    {
+                        let _ = events.send(Event::NotificationSoundPicked { group, path });
+                        waker.wake();
+                    }
+                });
+            }
             Command::SaveAttachmentAs { source, name } => {
                 let events = self.events.clone();
                 let waker = self.waker.clone();

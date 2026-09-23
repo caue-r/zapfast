@@ -666,10 +666,16 @@ impl App {
             .or_else(|| self.avatar(&sender))
             .or_else(|| self.cached_avatar(&sender));
         let waker = self.waker.clone();
+        let sound = if is_group {
+            self.settings.group_sound.clone()
+        } else {
+            self.settings.message_sound.clone()
+        };
         self.notifications.show(
             title,
             body,
             picture,
+            sound,
             chat_id.to_owned(),
             std::sync::Arc::clone(&self.notification_opens),
             move || waker.wake(),
@@ -1484,6 +1490,13 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::NotificationSoundPicked { group, path } => {
+                    crate::notify::play_sound(path.clone());
+                    self.actions.push(Action::SetNotificationSound {
+                        group,
+                        sound: crate::settings::NotificationSound::Custom(path),
+                    });
+                }
                 Event::InvitePreview { code, result } => {
                     use crate::model::InviteState;
                     if let Some(invite) = self.invite.as_mut().filter(|invite| invite.code == code)
@@ -3138,6 +3151,18 @@ impl App {
                 self.mark_settings_dirty();
             }
             Action::SettingsChanged => self.mark_settings_dirty(),
+            Action::SetNotificationSound { group, sound } => {
+                if group {
+                    self.settings.group_sound = sound;
+                } else {
+                    self.settings.message_sound = sound;
+                }
+                self.mark_settings_dirty();
+            }
+            Action::PickNotificationSound { group } => {
+                self.backend.send(Command::PickNotificationSound { group });
+            }
+            Action::PreviewSound(path) => crate::notify::play_sound(path),
             Action::SetStartWithSystem(enabled) => match crate::autostart::set(enabled) {
                 Ok(()) => self.start_with_system = Some(crate::autostart::enabled()),
                 Err(error) => self.toast_error(format!("Could not change the login item: {error}")),
@@ -4191,6 +4216,22 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn groups_and_chats_keep_their_own_notification_sound() {
+        use crate::settings::NotificationSound;
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.apply(
+            Action::SetNotificationSound {
+                group: true,
+                sound: NotificationSound::None,
+            },
+            &ctx,
+        );
+        assert_eq!(app.settings.group_sound, NotificationSound::None);
+        assert_eq!(app.settings.message_sound, NotificationSound::System);
     }
 
     #[test]

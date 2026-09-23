@@ -293,6 +293,10 @@ pub enum Command {
     },
     /// Selects and imports a .wastickers or zip archive.
     PickStickerArchive,
+    /// Asks for an audio file to use as a notification sound.
+    PickNotificationSound {
+        group: bool,
+    },
     /// Asks where to save a copy of an attachment, then copies it there.
     SaveAttachmentAs {
         source: std::path::PathBuf,
@@ -574,6 +578,11 @@ pub enum Event {
     /// Whether account privacy disables direct-chat read receipts.
     ReceiptsPrivacy {
         disabled: bool,
+    },
+    /// An audio file chosen as a notification sound.
+    NotificationSoundPicked {
+        group: bool,
+        path: std::path::PathBuf,
     },
     /// The group behind an invite link.
     InvitePreview {
