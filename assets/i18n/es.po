@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:14+0200\n"
+"POT-Creation-Date: 2026-09-23 16:17+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Spanish\n"
@@ -245,45 +245,51 @@ msgstr "Mostrar los dibujos predeterminados sobre el color seleccionado."
 
 #: src/ui/settings.rs:577
 msgid "Change profile picture"
-msgstr ""
+msgstr "Cambiar foto de perfil"
 
 #: src/ui/settings.rs:600
 msgid "Your name"
-msgstr ""
+msgstr "Tu nombre"
 
 #: src/ui/settings.rs:616
 msgid "Linked device"
-msgstr ""
+msgstr "Dispositivo vinculado"
 
 #: src/ui/settings.rs:627
 msgid "Edit your name and About"
-msgstr ""
+msgstr "Editar tu nombre e info."
 
 #: src/ui/settings.rs:644
 msgid "Unlink this computer"
-msgstr ""
+msgstr "Desvincular este ordenador"
 
 #: src/ui/settings.rs:664
 msgid "Save"
-msgstr ""
+msgstr "Guardar"
 
 #: src/ui/settings.rs:674
 msgid "Cancel"
-msgstr ""
+msgstr "Cancelar"
 
 #: src/ui/settings.rs:738
 msgid "A native WhatsApp client built with Rust, egui, and whatsapp-rust."
-msgstr ""
+msgstr "Un cliente nativo de WhatsApp hecho con Rust, egui y whatsapp-rust."
 
 #: src/ui/settings.rs:749
 #, rust-format
 msgid "Update to {version}"
-msgstr ""
+msgstr "Actualizar a {version}"
 
 #: src/ui/settings.rs:759
 msgid "Keyboard shortcuts"
-msgstr ""
+msgstr "Atajos de teclado"
 
 #: src/ui/settings.rs:781
 msgid "Source code"
-msgstr ""
+msgstr "Código fuente"
+
+#. Translators: {name} is replaced by the author's name, shown as a link.
+#: src/ui/widgets.rs:553
+#, rust-format
+msgid "Built with love by {name}"
+msgstr "Hecho con amor por {name}"
