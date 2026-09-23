@@ -3812,8 +3812,8 @@ impl App {
                     self.unread_kept.insert(id);
                 }
             }
-            // Ctrl+F keeps searching the chat list everywhere; the open chat
-            // has its own shortcut, Ctrl+Shift+F.
+            // Ctrl+K and Ctrl+Shift+F search the chat list everywhere; Ctrl+F
+            // searches the open chat when there is one.
             Action::FocusSearch => self.actions.push(Action::FocusChatList),
             Action::FocusChatList => {
                 // The list search takes over Escape and Enter from the chat's.
@@ -4076,6 +4076,9 @@ impl App {
                     // The headless loop in `main` will create the window.
                     self.wants_show = true;
                 } else {
+                    // Focus alone leaves a minimized window where it is on
+                    // Windows, so restore it first.
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                 }
             }
