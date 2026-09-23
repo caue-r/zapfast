@@ -1025,7 +1025,7 @@ pub enum Action {
     /// Saves the proxy setting and reconnects. Empty follows the environment.
     SetProxy(String),
     /// Plays a notification sound once, as a preview.
-    PreviewSound(PathBuf),
+    PreviewSound(crate::settings::NotificationSound),
     ZoomBy(f32),
     ResetZoom,
     /// Requests a pairing code for a phone number.

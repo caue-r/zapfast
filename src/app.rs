@@ -1550,7 +1550,9 @@ impl App {
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
                 Event::ChatSoundPicked { chat, path } => {
-                    crate::notify::play_sound(path.clone());
+                    crate::notify::play_sound(crate::settings::NotificationSound::Custom(
+                        path.clone(),
+                    ));
                     self.actions.push(Action::SetChatSound {
                         chat,
                         sound: Some(crate::settings::NotificationSound::Custom(path)),
@@ -1560,7 +1562,9 @@ impl App {
                     self.actions.push(Action::SetDownloadFolder(Some(path)));
                 }
                 Event::NotificationSoundPicked { group, path } => {
-                    crate::notify::play_sound(path.clone());
+                    crate::notify::play_sound(crate::settings::NotificationSound::Custom(
+                        path.clone(),
+                    ));
                     self.actions.push(Action::SetNotificationSound {
                         group,
                         sound: crate::settings::NotificationSound::Custom(path),
@@ -3446,7 +3450,7 @@ impl App {
             Action::PickNotificationSound { group } => {
                 self.backend.send(Command::PickNotificationSound { group });
             }
-            Action::PreviewSound(path) => crate::notify::play_sound(path),
+            Action::PreviewSound(sound) => crate::notify::play_sound(sound),
             Action::PickDownloadFolder => self.backend.send(Command::PickDownloadFolder),
             Action::SetProfile { name, about } => {
                 self.backend.send(Command::SetProfile { name, about });
@@ -4703,7 +4707,7 @@ mod tests {
             &ctx,
         );
         assert_eq!(app.settings.group_sound, NotificationSound::None);
-        assert_eq!(app.settings.message_sound, NotificationSound::System);
+        assert_eq!(app.settings.message_sound, NotificationSound::Chime);
     }
 
     #[test]

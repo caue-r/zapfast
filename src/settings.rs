@@ -279,8 +279,12 @@ impl WallpaperColor {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationSound {
-    /// Whatever the operating system plays for notifications.
+    /// ZapFast's two-note chime, the default for one-to-one chats.
     #[default]
+    Chime,
+    /// ZapFast's three-note ripple, the default for groups.
+    Ripple,
+    /// Whatever the operating system plays for notifications.
     System,
     /// No sound.
     None,
@@ -395,8 +399,8 @@ impl Default for Settings {
             giphy_key: String::new(),
             keep_running_in_background: true,
             notifications: true,
-            message_sound: NotificationSound::System,
-            group_sound: NotificationSound::System,
+            message_sound: NotificationSound::Chime,
+            group_sound: NotificationSound::Ripple,
             download_folder: None,
             proxy: String::new(),
             check_for_updates: true,
