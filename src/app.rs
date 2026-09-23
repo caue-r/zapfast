@@ -2480,6 +2480,10 @@ impl App {
                     }
                 }
             }
+            Action::SaveAttachmentAs { path, name } => {
+                self.backend
+                    .send(Command::SaveAttachmentAs { source: path, name });
+            }
             Action::OpenFolder(path) => {
                 if path.is_dir() {
                     if let Err(error) = open::that_detached(&path) {

@@ -147,7 +147,9 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **View attachments.** ZapFast downloads files up to 64 MiB automatically or
   on click. Photos, stickers, GIFs, voice messages, audio, locations, contacts,
   polls, and link previews appear in the chat. Videos and documents open in
-  their default desktop apps. Profile pictures and downloaded images support
+  their default desktop apps. **Save as…** in a downloaded attachment's
+  right-click menu keeps a copy wherever you choose, starting in your
+  Downloads folder. Profile pictures and downloaded images support
   Windows drive paths and filenames with spaces or non-ASCII characters.
   If an attachment has expired, ZapFast asks your
   phone to upload it again. Downloads stop after two minutes with an inline

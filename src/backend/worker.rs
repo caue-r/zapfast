@@ -3318,6 +3318,38 @@ impl Worker {
                     let _ = commands.send(Command::StickerPackImported { result });
                 });
             }
+            Command::SaveAttachmentAs { source, name } => {
+                let events = self.events.clone();
+                let waker = self.waker.clone();
+                tokio::task::spawn_blocking(move || {
+                    let mut dialog = rfd::FileDialog::new()
+                        .set_title("Save attachment")
+                        .set_file_name(&name);
+                    if let Some(downloads) = directories::UserDirs::new()
+                        .and_then(|dirs| dirs.download_dir().map(Path::to_path_buf))
+                    {
+                        dialog = dialog.set_directory(downloads);
+                    }
+                    // Cancelling the dialog saves nothing and says nothing.
+                    let Some(target) = dialog.save_file() else {
+                        return;
+                    };
+                    let event = match std::fs::copy(&source, &target) {
+                        Ok(_) => Event::Info(format!(
+                            "Saved {}",
+                            target.file_name().map_or_else(
+                                || name.clone(),
+                                |name| name.to_string_lossy().into_owned()
+                            )
+                        )),
+                        Err(error) => {
+                            Event::Error(format!("Could not save the attachment: {error}"))
+                        }
+                    };
+                    let _ = events.send(event);
+                    waker.wake();
+                });
+            }
             Command::PickStickerArchive => {
                 let commands = self.commands.clone();
                 let packs = self.packs_dir();

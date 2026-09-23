@@ -817,6 +817,11 @@ pub enum Action {
     SendRecording,
     OpenFile(PathBuf),
     OpenFolder(PathBuf),
+    /// Saves a copy of a downloaded attachment where the person chooses.
+    SaveAttachmentAs {
+        path: PathBuf,
+        name: String,
+    },
     OpenUrl(String),
     CopyText(String),
     /// Closes the toast at this index. Only errors wait to be dismissed.

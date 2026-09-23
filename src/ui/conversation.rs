@@ -1,7 +1,7 @@
 //! The open chat: its header, the messages, and the composer.
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use egui::{
@@ -2743,6 +2743,12 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
                 if widgets::menu_item(ui, &palette, Some(Icon::ExternalLink), "Open file") {
                     actions.push(Action::OpenFile(path.clone()));
                 }
+                if widgets::menu_item(ui, &palette, Some(Icon::Download), "Save as…") {
+                    actions.push(Action::SaveAttachmentAs {
+                        path: path.clone(),
+                        name: attachment_name(&message.content, path),
+                    });
+                }
                 if let Some(folder) = path.parent()
                     && widgets::menu_item(ui, &palette, Some(Icon::FileText), "Show in folder")
                 {
@@ -4665,6 +4671,20 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
     );
 }
 
+/// The file name to suggest when saving an attachment: the sender's name for
+/// documents, the cached file's name otherwise. Path separators are dropped so
+/// a crafted name cannot point the dialog somewhere else.
+fn attachment_name(content: &Content, path: &Path) -> String {
+    let name = match content {
+        Content::Document { file_name, .. } if !file_name.trim().is_empty() => file_name.clone(),
+        _ => path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "attachment".to_owned()),
+    };
+    name.replace(['/', '\\'], "_")
+}
+
 /// Whether a conversation has visible content. Used by tests.
 #[allow(dead_code)]
 pub fn has_messages(conversation: &Conversation) -> bool {
@@ -4692,6 +4712,23 @@ fn chat_of(chat: &ChatId) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_attachments_suggest_a_plain_file_name() {
+        let document = |file_name: &str| Content::Document {
+            media: media(None, None),
+            file_name: file_name.into(),
+            caption: None,
+            pages: None,
+        };
+        let cached = Path::new("/cache/media/abc123.pdf");
+        assert_eq!(attachment_name(&document("Notes.pdf"), cached), "Notes.pdf");
+        assert_eq!(
+            attachment_name(&document("../../.bashrc"), cached),
+            ".._.._.bashrc"
+        );
+        assert_eq!(attachment_name(&document("  "), cached), "abc123.pdf");
+    }
 
     fn media(w: Option<u32>, h: Option<u32>) -> Media {
         Media {

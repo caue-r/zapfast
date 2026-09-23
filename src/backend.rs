@@ -293,6 +293,11 @@ pub enum Command {
     },
     /// Selects and imports a .wastickers or zip archive.
     PickStickerArchive,
+    /// Asks where to save a copy of an attachment, then copies it there.
+    SaveAttachmentAs {
+        source: std::path::PathBuf,
+        name: String,
+    },
     /// Deletes an imported pack directory.
     DeleteStickerPack {
         dir: PathBuf,
