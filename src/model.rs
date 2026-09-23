@@ -282,6 +282,9 @@ pub enum Content {
         media: Media,
         seconds: Option<u32>,
         gif: bool,
+        /// A round video message, which WhatsApp calls PTV.
+        #[serde(default)]
+        note: bool,
     },
     Audio {
         media: Media,
@@ -463,9 +466,18 @@ impl Content {
                 text.lines().next().unwrap_or_default().to_owned()
             }
             Self::Image { caption, .. } => with_caption("Photo", caption),
-            Self::Video { caption, gif, .. } => {
-                with_caption(if *gif { "GIF" } else { "Video" }, caption)
-            }
+            Self::Video {
+                caption, gif, note, ..
+            } => with_caption(
+                if *gif {
+                    "GIF"
+                } else if *note {
+                    "Video message"
+                } else {
+                    "Video"
+                },
+                caption,
+            ),
             Self::Audio {
                 voice_note,
                 seconds,
@@ -907,6 +919,20 @@ pub enum Action {
     },
     /// Sets the voice playback speed to one of the supported speeds.
     SetVoiceSpeed(f32),
+    /// Plays or pauses a downloaded video inside its message.
+    PlayVideo {
+        message: String,
+        path: PathBuf,
+    },
+    /// Plays a video in the open chat once its download finishes.
+    PlayVideoWhenDownloaded(String),
+    /// Jumps to a fraction from 0 to 1 of the playing video.
+    SeekVideo {
+        message: String,
+        fraction: f32,
+    },
+    /// Mutes or unmutes video playback.
+    ToggleVideoSound,
     /// Starts, cancels, or sends a voice recording.
     StartRecording,
     CancelRecording,

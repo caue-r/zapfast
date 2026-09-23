@@ -627,6 +627,7 @@ pub fn populate(app: &mut App) {
                     media: media("video/mp4", 820_000, Some(1280), Some(720)),
                     seconds: Some(5),
                     gif: false,
+                    note: false,
                 },
             );
             row.thumbnail = Some(sample_thumbnail(2));
@@ -1201,6 +1202,57 @@ fn message_info_sample(app: &mut App, recorded: bool) {
     });
 }
 
+/// A three-second H.264 and AAC clip, the same one the video tests decode.
+const DEMO_VIDEO: &[u8] = include_bytes!("../tests/fixtures/video/sample.mp4");
+
+/// Replaces the first chat with videos: a downloaded one, a round video
+/// message of our own, and one still on WhatsApp's servers. `play` starts
+/// one of them.
+fn video_sample(app: &mut App, play: Option<&str>) {
+    let id = SAMPLES[0].id;
+    let now = crate::util::now();
+    let path = app.dirs.media_cache_dir().join("demo-video.mp4");
+    let _ = std::fs::create_dir_all(app.dirs.media_cache_dir());
+    let _ = std::fs::write(&path, DEMO_VIDEO);
+    let clip = |note: bool, downloaded: bool| {
+        let mut media = media("video/mp4", DEMO_VIDEO.len() as u64, Some(320), Some(180));
+        if downloaded {
+            media.path = Some(path.clone());
+        }
+        Content::Video {
+            caption: None,
+            media,
+            seconds: Some(3),
+            gif: false,
+            note,
+        }
+    };
+    let mut rows = vec![
+        message(id, "demo-note-remote", false, 0, clip(true, false)),
+        message(id, "demo-video", false, 0, clip(false, true)),
+        message(id, "demo-note", true, 0, clip(true, true)),
+    ];
+    // The one that plays comes last, so it is on screen.
+    if let Some(index) = play.and_then(|play| rows.iter().position(|row| row.id == play)) {
+        let playing = rows.remove(index);
+        rows.push(playing);
+    }
+    for (index, row) in rows.iter_mut().enumerate() {
+        row.thumbnail = Some(sample_thumbnail(index as u32 + 5));
+        row.timestamp = now - 300 + index as i64 * 100;
+    }
+    app.conversations.entry(id.into()).or_default().messages = rows;
+    app.open_chat = Some(id.into());
+    // Screenshots stay quiet.
+    app.video.silence();
+    if let Some(message) = play {
+        app.actions.push(crate::model::Action::PlayVideo {
+            message: message.into(),
+            path,
+        });
+    }
+}
+
 pub fn apply_flags(app: &mut App, page: Option<&str>) {
     let Some(page) = page else {
         return;
@@ -1224,6 +1276,9 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "poll-empty" => poll_sample(app, false, false),
             "poll-voted" => poll_sample(app, true, false),
             "poll-results" => poll_sample(app, true, true),
+            "video" => video_sample(app, None),
+            "video-playing" => video_sample(app, Some("demo-video")),
+            "note-playing" => video_sample(app, Some("demo-note")),
             "interactive" | "interactive-media" => {
                 interactive_sample(app, part == "interactive-media")
             }
@@ -2901,6 +2956,9 @@ mod tests {
             "message-info",
             "message-info-unknown",
             "message-info-direct",
+            "video",
+            "video-playing",
+            "note-playing",
             "empty",
             "rtl",
             "disappearing",
@@ -5741,6 +5799,7 @@ mod tests {
                         media: media("video/mp4", 820_000, Some(1280), Some(720)),
                         seconds: Some(5),
                         gif: false,
+                        note: false,
                     },
                 );
                 row.thumbnail = Some(sample_thumbnail(index as u32));

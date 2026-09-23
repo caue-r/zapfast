@@ -161,8 +161,13 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   on click. Photos, stickers, GIFs, voice messages, audio, locations, contacts,
   polls, and link previews appear in the chat. Click a downloaded JPEG, PNG,
   WebP, or GIF photo to preview it in ZapFast with fit and zoom controls, or
-  choose **Open externally**. Unsupported pictures, videos, and documents keep
-  opening in their default desktop apps. **Save as…** in a downloaded
+  choose **Open externally**. Click a video to play it in its message, with
+  sound, a seek bar, and a mute switch; round video messages play inside their
+  circle with a progress ring, like on the phone. A video that is not
+  downloaded yet downloads first and then plays. Videos in codecs other than
+  H.264, such as HEVC, open in your system player, and so does **Open in system
+  player** in a video's right-click menu. Unsupported pictures and documents
+  keep opening in their default desktop apps. **Save as…** in a downloaded
   attachment's right-click menu keeps a copy wherever you choose, starting in
   your Downloads folder. Profile pictures and downloaded images support
   Windows drive paths and filenames with spaces or non-ASCII characters.
@@ -263,8 +268,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 
 ## What it does not do yet
 
-- Play ordinary videos in the app (they open in your player), or reply to
-  a message with an attachment.
+- Reply to a message with an attachment, or play videos in codecs other than
+  H.264 in the app (they open in your system player).
 - Calls, status posts, communities, newsletters, and group administration.
 - Submit interactive forms, payments, shopping flows, or carousel selections.
   Use these in WhatsApp Web or on your phone. Embedded videos and documents,
@@ -628,6 +633,8 @@ For an automatic start, add `--demo-tour-delay 5000` (milliseconds).
 Use `--demo` instead of `--demo-tour` to explore the sample chats yourself.
 Use `--demo-page chat-menu` to preview the compact chat context menu, and
 `--demo-page chat,voice,voice-menu` for a voice message's menu with its speeds.
+`--demo-page video` shows a video and round video messages, and
+`video-playing` or `note-playing` starts one of them, silently.
 For deterministic theme screenshots, `--demo-page settings,omarchy` and
 `--demo-page settings,omarchy-light` preview following dark and light Omarchy
 palettes without changing the desktop theme.

@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:52+0200\n"
+"POT-Creation-Date: 2026-09-23 16:56+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: German\n"
@@ -187,16 +187,37 @@ msgstr ""
 msgid "All shortcuts ({})"
 msgstr "Alle Tastenkürzel ({})"
 
-#: src/ui/conversation.rs:1453
+#: src/ui/conversation.rs:1455
 #, rust-format
 msgid "{} unread message"
 msgid_plural "{} unread messages"
 msgstr[0] "{} ungelesene Nachricht"
 msgstr[1] "{} ungelesene Nachrichten"
 
-#: src/ui/conversation.rs:3114 src/ui/message_info.rs:17
+#: src/ui/conversation.rs:3058
+msgid "Open in system player"
+msgstr "Im Systemplayer öffnen"
+
+#: src/ui/conversation.rs:3126 src/ui/message_info.rs:17
 msgid "Message info"
 msgstr "Nachrichteninfo"
+
+#: src/ui/conversation.rs:4733
+msgid "Pause"
+msgstr "Pause"
+
+#: src/ui/conversation.rs:4735
+#, fuzzy
+msgid "Play"
+msgstr "Abgespielt"
+
+#: src/ui/conversation.rs:4758
+msgid "Unmute"
+msgstr "Ton an"
+
+#: src/ui/conversation.rs:4760
+msgid "Mute"
+msgstr "Stumm"
 
 #: src/ui/dialogs.rs:1151
 #, rust-format
@@ -390,3 +411,7 @@ msgstr[1] "{} ausstehend"
 #: src/ui/message_info.rs:264
 msgid "No one yet"
 msgstr "Noch niemand"
+
+#: src/app.rs:3740
+msgid "This video opens in your system player"
+msgstr "Dieses Video öffnet sich im Systemplayer"

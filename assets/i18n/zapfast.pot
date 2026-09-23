@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:52+0200\n"
+"POT-Creation-Date: 2026-09-23 16:56+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -185,15 +185,35 @@ msgstr ""
 msgid "All shortcuts ({})"
 msgstr ""
 
-#: src/ui/conversation.rs:1453
+#: src/ui/conversation.rs:1455
 #, rust-format
 msgid "{} unread message"
 msgid_plural "{} unread messages"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/conversation.rs:3114 src/ui/message_info.rs:17
+#: src/ui/conversation.rs:3058
+msgid "Open in system player"
+msgstr ""
+
+#: src/ui/conversation.rs:3126 src/ui/message_info.rs:17
 msgid "Message info"
+msgstr ""
+
+#: src/ui/conversation.rs:4733
+msgid "Pause"
+msgstr ""
+
+#: src/ui/conversation.rs:4735
+msgid "Play"
+msgstr ""
+
+#: src/ui/conversation.rs:4758
+msgid "Unmute"
+msgstr ""
+
+#: src/ui/conversation.rs:4760
+msgid "Mute"
 msgstr ""
 
 #: src/ui/dialogs.rs:1151
@@ -379,4 +399,8 @@ msgstr[1] ""
 
 #: src/ui/message_info.rs:264
 msgid "No one yet"
+msgstr ""
+
+#: src/app.rs:3740
+msgid "This video opens in your system player"
 msgstr ""

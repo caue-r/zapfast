@@ -263,6 +263,12 @@ pub struct App {
     pub pending: Vec<Pending>,
     /// In-chat audio player.
     pub player: Player,
+    /// In-chat video player.
+    pub video: crate::video::Player,
+    /// Chat of the loaded video; leaving it stops the video.
+    video_chat: Option<ChatId>,
+    /// Video to play once its download finishes.
+    video_wanted: Option<(ChatId, String)>,
     /// Active voice recorder.
     pub recording: Option<Recorder>,
     /// Keeps other apps' music paused while recording or playing audio.
@@ -530,6 +536,9 @@ impl App {
             emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
+            video: crate::video::Player::new(waker.clone()),
+            video_chat: None,
+            video_wanted: None,
             recording: None,
             media_hold: None,
             pauses_media: false,
@@ -1926,8 +1935,19 @@ impl App {
         };
         match result {
             Ok(path) => {
-                media.path = Some(path);
+                media.path = Some(path.clone());
                 media.state = MediaState::Idle;
+                if self
+                    .video_wanted
+                    .as_ref()
+                    .is_some_and(|(wanted_chat, wanted)| wanted_chat == chat && wanted == id)
+                {
+                    self.video_wanted = None;
+                    self.actions.push(Action::PlayVideo {
+                        message: id.to_owned(),
+                        path,
+                    });
+                }
             }
             Err(error) => {
                 // Show expired-file failures in the bubble, not as a toast.
@@ -2890,6 +2910,12 @@ impl App {
             }
             Action::ClearPending => self.pending.clear(),
             Action::PlayVoice { message, path } => self.play_voice(message, path),
+            Action::PlayVideo { message, path } => self.play_video(message, path),
+            Action::PlayVideoWhenDownloaded(message) => {
+                self.video_wanted = self.open_chat.clone().map(|chat| (chat, message));
+            }
+            Action::SeekVideo { message, fraction } => self.video.seek(&message, fraction),
+            Action::ToggleVideoSound => self.video.toggle_mute(),
             Action::SeekVoice {
                 message,
                 path,
@@ -3652,6 +3678,7 @@ impl App {
         self.handle_events();
         self.tick(ctx);
         self.tick_audio();
+        self.tick_video(ctx);
         self.apply_actions(ctx);
         self.hold_media();
         self.follow_receipts();
@@ -3701,8 +3728,45 @@ impl App {
         }
     }
 
+    /// Shows the playing video's frames, stops it once its chat is left, and
+    /// hands a video it cannot decode to the system player.
+    fn tick_video(&mut self, ctx: &egui::Context) {
+        if self.video.message().is_some() && self.video_chat != self.open_chat {
+            self.video.stop();
+        }
+        if let Some(crate::video::Notice::Unsupported(path)) = self.video.poll(ctx) {
+            self.toast(crate::i18n::gettext(
+                self.locale,
+                "This video opens in your system player",
+            ));
+            self.actions.push(Action::OpenFile(path));
+        }
+    }
+
+    /// Plays or pauses a video in its message. A video message, the round
+    /// kind, sends its played receipt like a voice message.
+    fn play_video(&mut self, message: String, path: PathBuf) {
+        let Some(chat) = self.open_chat.clone() else {
+            return;
+        };
+        // One sound at a time.
+        self.player.stop();
+        let starting = self.video.message() != Some(message.as_str());
+        self.video.toggle(&message, &path);
+        self.video_chat = Some(chat.clone());
+        let note = self
+            .conversations
+            .get(&chat)
+            .and_then(|conversation| conversation.message(&message))
+            .is_some_and(|row| matches!(row.content, Content::Video { note: true, .. }));
+        if starting && note {
+            self.tell_played(message);
+        }
+    }
+
     /// Plays or pauses audio and sends the first played receipt when needed.
     fn play_voice(&mut self, message: String, path: PathBuf) {
+        self.video.stop();
         if let Err(error) = self.player.toggle(&message, &path) {
             self.toast_error(error);
             return;
@@ -5172,6 +5236,63 @@ mod tests {
             .expect("still present");
         assert_eq!(media.path, Some(relocated));
         assert_eq!(media.state, MediaState::Idle);
+    }
+
+    #[test]
+    fn a_video_note_clicked_before_download_plays_once_it_arrives() {
+        let mut app = app();
+        app.video.silence();
+        let chat = "fixture@s.whatsapp.net";
+        let mut clip = message(chat, "clip", 1);
+        clip.content = Content::Video {
+            caption: None,
+            media: Media {
+                mime: "video/mp4".into(),
+                size: 100,
+                width: None,
+                height: None,
+                path: None,
+                state: MediaState::Idle,
+            },
+            seconds: Some(3),
+            gif: false,
+            note: true,
+        };
+        app.conversations
+            .entry(chat.into())
+            .or_default()
+            .merge(vec![clip], false);
+        app.open_chat = Some(chat.into());
+        let ctx = egui::Context::default();
+        app.apply(Action::PlayVideoWhenDownloaded("clip".into()), &ctx);
+        let (backend, events) = Backend::detached();
+        app.backend = backend;
+        let path = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/video/sample.mp4"
+        ));
+        events
+            .send(Event::Media {
+                card: None,
+                chat: chat.into(),
+                message: "clip".into(),
+                result: Ok(path.clone()),
+            })
+            .unwrap();
+        app.handle_events();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        app.apply_actions(&ctx);
+        assert_eq!(app.video.message(), Some("clip"));
+        // A round video message is played like a voice message.
+        assert!(matches!(
+            commands.try_recv(),
+            Ok(Command::MarkPlayed { message, .. }) if message == "clip"
+        ));
+        // Leaving the chat stops it.
+        app.open_chat = None;
+        app.tick_video(&ctx);
+        assert!(app.video.message().is_none());
     }
 
     #[test]

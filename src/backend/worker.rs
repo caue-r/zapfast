@@ -435,6 +435,7 @@ pub async fn run(
     };
     worker.load_state();
     worker.backfill();
+    worker.backfill_video_notes();
     worker.backfill_interactive();
     worker.relocate_media();
     discard_attachment_staging(&worker.dirs.media_cache_dir());
@@ -1091,6 +1092,56 @@ impl Worker {
                 "re-derived {updated} archived messages in {:.1?}",
                 started.elapsed()
             );
+            self.emit_chats();
+        }
+    }
+
+    /// Marks archived round video messages, filed before videos told them
+    /// apart, so they draw as circles. Only that flag changes: deriving the
+    /// whole row again would drop edits and local paths.
+    fn backfill_video_notes(&mut self) {
+        const KEY: &str = "video_notes";
+        if self.archive.meta(KEY).ok().flatten().as_deref() == Some("1") {
+            return;
+        }
+        let rows = match self.archive.videos_with_raw() {
+            Ok(rows) => rows,
+            Err(error) => {
+                log::warn!("could not read archived videos: {error}");
+                return;
+            }
+        };
+        let mut updated = 0;
+        for (chat, id, raw) in rows {
+            let Ok(message) = wa::Message::decode_from_slice(&raw) else {
+                continue;
+            };
+            let base = message.get_base_message();
+            if base.video_message.as_option().is_some() || base.ptv_message.as_option().is_none() {
+                continue;
+            }
+            let Ok(Some(existing)) = self.archive.message(&chat, &id) else {
+                continue;
+            };
+            let mut content = existing.content;
+            let Content::Video { note, .. } = &mut content else {
+                continue;
+            };
+            if *note {
+                continue;
+            }
+            *note = true;
+            if self
+                .archive
+                .set_content(&chat, &id, &content, existing.edited)
+                .is_ok()
+            {
+                updated += 1;
+            }
+        }
+        let _ = self.archive.set_meta(KEY, "1");
+        if updated > 0 {
+            log::info!("marked {updated} archived video messages as round");
             self.emit_chats();
         }
     }
@@ -6146,6 +6197,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
             ),
             seconds: video.seconds,
             gif: video.gif_playback.unwrap_or(false),
+            note: base.video_message.as_option().is_none(),
         });
     }
     if let Some(audio) = base.audio_message.as_option() {
@@ -6458,6 +6510,7 @@ async fn prepare_media(
                 media: media(Some(&mime_owned), Some(size), None, None),
                 seconds: None,
                 gif,
+                note: false,
             },
             thumbnail: None,
             bytes,
@@ -7414,6 +7467,32 @@ mod tests {
     }
 
     #[test]
+    fn round_video_messages_are_marked_as_notes() {
+        let clip = wa::message::VideoMessage {
+            mimetype: Some("video/mp4".into()),
+            seconds: Some(12),
+            ..Default::default()
+        };
+        let note = |content: Option<Content>| match content {
+            Some(Content::Video { note, seconds, .. }) => {
+                assert_eq!(seconds, Some(12));
+                note
+            }
+            other => panic!("unexpected {other:?}"),
+        };
+        let round = wa::Message {
+            ptv_message: MessageField::some(clip.clone()),
+            ..Default::default()
+        };
+        assert!(note(classify(&round)));
+        let plain = wa::Message {
+            video_message: MessageField::some(clip),
+            ..Default::default()
+        };
+        assert!(!note(classify(&plain)));
+    }
+
+    #[test]
     fn unsafe_preview_metadata_cannot_launch_a_desktop_handler() {
         let message = wa::Message {
             extended_text_message: MessageField::some(wa::message::ExtendedTextMessage {
@@ -8150,6 +8229,69 @@ mod receipt_tests {
             receipts_pruned: Instant::now(),
         };
         (worker, events_rx, inbox, wa_events)
+    }
+
+    #[test]
+    fn archived_round_videos_become_notes_and_keep_their_rows() {
+        let (mut worker, _events, _commands, _wa) = worker();
+        worker.archive.ensure_chat(PEER, "Demo").unwrap();
+        let clip = wa::message::VideoMessage {
+            mimetype: Some("video/mp4".into()),
+            ..Default::default()
+        };
+        let round = wa::Message {
+            ptv_message: MessageField::some(clip.clone()),
+            ..Default::default()
+        };
+        let plain = wa::Message {
+            video_message: MessageField::some(clip),
+            ..Default::default()
+        };
+        for (id, raw) in [("round", &round), ("plain", &plain)] {
+            let mut message = own_message(id, 1);
+            let Some(Content::Video {
+                mut media,
+                seconds,
+                gif,
+                ..
+            }) = classify(raw)
+            else {
+                panic!("not a video");
+            };
+            media.path = Some(std::path::PathBuf::from("/fixture/clip.mp4"));
+            // Filed before round videos were told apart.
+            message.content = Content::Video {
+                caption: None,
+                media,
+                seconds,
+                gif,
+                note: false,
+            };
+            worker
+                .archive
+                .insert_message(&message, Some(&raw.encode_to_vec()))
+                .unwrap();
+        }
+        worker.backfill_video_notes();
+        let stored = |id: &str| worker.archive.message(PEER, id).unwrap().unwrap().content;
+        match stored("round") {
+            Content::Video { note, media, .. } => {
+                assert!(note);
+                assert_eq!(
+                    media.path,
+                    Some(std::path::PathBuf::from("/fixture/clip.mp4"))
+                );
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(matches!(
+            stored("plain"),
+            Content::Video { note: false, .. }
+        ));
+        assert_eq!(
+            worker.archive.meta("video_notes").unwrap().as_deref(),
+            Some("1")
+        );
     }
 
     pub(super) fn own_message(id: &str, timestamp: i64) -> Message {
