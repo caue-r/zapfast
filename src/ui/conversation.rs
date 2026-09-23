@@ -2712,6 +2712,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         message.content,
         Content::Revoked
             | Content::Unsupported { .. }
+            | Content::PhoneOnly { .. }
             | Content::Poll { .. }
             | Content::Interactive { .. }
     ) && widgets::menu_item(ui, &palette, Some(Icon::Forward), "Forward")
@@ -3132,6 +3133,24 @@ fn content(
                         theme::regular(13.5),
                         palette.secondary,
                     );
+                },
+            );
+            None
+        }
+        Content::PhoneOnly { view_once } => {
+            let text = if *view_once {
+                "View once message. For your privacy, it opens only on your phone."
+            } else {
+                "This message can only be seen on your phone."
+            };
+            mirrored_row(
+                ui,
+                own,
+                |ui| {
+                    theme::icon(ui, Icon::Smartphone, 14.0, palette.dim);
+                },
+                |ui| {
+                    theme::text(ui, text, theme::regular(13.5), palette.secondary);
                 },
             );
             None

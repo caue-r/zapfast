@@ -320,6 +320,11 @@ pub enum Content {
     Unsupported {
         what: String,
     },
+    /// A message WhatsApp only delivers to the phone, such as view-once
+    /// media. Linked devices receive a placeholder that never fills in.
+    PhoneOnly {
+        view_once: bool,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -483,6 +488,8 @@ impl Content {
             Self::Poll { question, .. } => format!("Poll: {question}"),
             Self::Revoked => "This message was deleted".to_owned(),
             Self::Unsupported { what } => format!("Unsupported message ({what})"),
+            Self::PhoneOnly { view_once: true } => "View once message".to_owned(),
+            Self::PhoneOnly { view_once: false } => "Message on your phone".to_owned(),
         }
     }
 

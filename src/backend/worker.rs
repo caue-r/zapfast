@@ -1789,7 +1789,7 @@ impl Worker {
                 }
             }
             E::UndecryptableMessage(undecryptable) => {
-                self.ingest_undecryptable(&undecryptable.info);
+                self.ingest_undecryptable(&undecryptable.info, undecryptable.unavailable_type);
             }
             E::Receipt(receipt) => self.on_receipt(receipt),
             E::ChatPresence(presence) => {
@@ -2522,7 +2522,11 @@ impl Worker {
         }
     }
 
-    fn ingest_undecryptable(&mut self, info: &MessageInfo) {
+    fn ingest_undecryptable(
+        &mut self,
+        info: &MessageInfo,
+        unavailable: wa_events::UnavailableType,
+    ) {
         self.learn_source(&info.source);
         if info.source.chat.is_status_broadcast() || info.source.is_from_me {
             return;
@@ -2545,8 +2549,16 @@ impl Worker {
             sender_name: push_name.as_ref().map(ToString::to_string),
             from_me: false,
             timestamp: info.timestamp.timestamp(),
-            content: Content::Unsupported {
-                what: "Waiting for this message. Open WhatsApp on your phone".to_owned(),
+            content: match unavailable {
+                // The phone never shares these with linked devices, so do not
+                // suggest that the message is still on its way.
+                wa_events::UnavailableType::ViewOnce => Content::PhoneOnly { view_once: true },
+                wa_events::UnavailableType::Hosted | wa_events::UnavailableType::Bot => {
+                    Content::PhoneOnly { view_once: false }
+                }
+                _ => Content::Unsupported {
+                    what: "Waiting for this message. Open WhatsApp on your phone".to_owned(),
+                },
             },
             status: Delivery::None,
             delivered_at: None,
@@ -4084,6 +4096,7 @@ impl Worker {
             source.content,
             Content::Revoked
                 | Content::Unsupported { .. }
+                | Content::PhoneOnly { .. }
                 | Content::Poll { .. }
                 | Content::Interactive { .. }
         ) {
@@ -7103,6 +7116,46 @@ mod tests {
         assert!(!worker.unavailable_due(), "announced once per connection");
         worker.set_online(true);
         assert!(!worker.unavailable_due());
+    }
+
+    #[test]
+    fn view_once_placeholders_say_they_open_only_on_the_phone() {
+        let (mut worker, _events, _, _) = receipt_tests::worker();
+        for (id, unavailable, expected) in [
+            (
+                "once",
+                wa_events::UnavailableType::ViewOnce,
+                Some(Content::PhoneOnly { view_once: true }),
+            ),
+            (
+                "bot",
+                wa_events::UnavailableType::Bot,
+                Some(Content::PhoneOnly { view_once: false }),
+            ),
+            ("later", wa_events::UnavailableType::Unknown, None),
+        ] {
+            let info = MessageInfo {
+                id: id.into(),
+                source: MessageSource {
+                    chat: "200@s.whatsapp.net".parse().unwrap(),
+                    sender: "200@s.whatsapp.net".parse().unwrap(),
+                    ..Default::default()
+                },
+                timestamp: whatsapp_rust::wacore::time::from_secs(100).unwrap(),
+                ..Default::default()
+            };
+            worker.ingest_undecryptable(&info, unavailable);
+            let stored = worker
+                .archive
+                .message("200@s.whatsapp.net", id)
+                .unwrap()
+                .unwrap()
+                .content;
+            match expected {
+                Some(content) => assert_eq!(stored, content),
+                None => assert!(matches!(stored, Content::Unsupported { .. })),
+            }
+        }
     }
 
     #[test]
