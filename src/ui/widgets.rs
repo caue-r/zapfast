@@ -300,6 +300,62 @@ pub fn menu_width(ui: &Ui, labels: &[&str], icons: bool) -> f32 {
     widest + if icons { 26.0 } else { 0.0 } + 20.0 + 12.0
 }
 
+/// A context-menu entry that opens a submenu, drawn like the plain entries
+/// beside it, with a chevron.
+pub fn submenu<R>(
+    ui: &mut Ui,
+    palette: &Palette,
+    icon: Icon,
+    label: &str,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+) -> Option<egui::InnerResponse<R>> {
+    let width = ui.available_width();
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click());
+    theme::reveal_focus(&response);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
+    let open = egui::Popup::is_id_open(
+        ui.ctx(),
+        egui::containers::menu::SubMenu::id_from_widget_id(response.id),
+    );
+    if ui.is_rect_visible(rect) {
+        if response.hovered() || open {
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(6), palette.surface_hover);
+        }
+        let icon_rect =
+            Rect::from_center_size(pos2(rect.left() + 18.0, rect.center().y), Vec2::splat(16.0));
+        icon.image(palette.secondary, 16.0).paint_at(ui, icon_rect);
+        let chevron = Rect::from_center_size(
+            pos2(rect.right() - 16.0, rect.center().y),
+            Vec2::splat(14.0),
+        );
+        Icon::ChevronRight
+            .image(palette.secondary, 14.0)
+            .paint_at(ui, chevron);
+        let x = rect.left() + 36.0;
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            label.to_string(),
+            theme::regular(13.5),
+            palette.text,
+        );
+        job.wrap = egui::text::TextWrapping {
+            max_width: (chevron.left() - 6.0 - x).max(0.0),
+            max_rows: 1,
+            break_anywhere: true,
+            overflow_character: Some('\u{2026}'),
+        };
+        let galley = crate::bidi::layout_job(ui, job);
+        ui.painter().galley(
+            pos2(x, rect.center().y - galley.size().y / 2.0),
+            galley,
+            palette.text,
+        );
+    }
+    egui::containers::menu::SubMenu::new().show(ui, &response, add_contents)
+}
+
 pub fn menu_item(ui: &mut Ui, palette: &Palette, icon: Option<Icon>, label: &str) -> bool {
     menu_item_enabled(ui, palette, icon, label, true)
 }
