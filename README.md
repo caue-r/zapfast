@@ -379,9 +379,12 @@ any open locked conversation. Typing the code into ordinary search remains
 an alternative way in. Revealed locked chats are currently read-only:
 sending messages and forwarding into them remain disabled.
 
-On the first start after upgrading, chats wait for WhatsApp's lock-state
-recovery before appearing. Failed recovery retries while keeping chats hidden.
-The recovered state is saved in the encrypted archive for offline use.
+After linking or upgrading, chats wait up to ten seconds for WhatsApp's lock
+state before appearing. Chats already known to be locked stay hidden. If the
+lock state cannot be confirmed in time, the chats appear with a notice that
+chats locked on the phone may show until they sync, and recovery keeps retrying
+in the background. The recovered state is saved in the encrypted archive for
+offline use.
 
 Protocol logs omit private payloads and raw error details, including verbose
 logging. Panic logs record the source location without the panic payload.

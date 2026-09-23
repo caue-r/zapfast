@@ -352,14 +352,23 @@ pub async fn run(
         }
     };
     let (wa_sender, wa_events) = mpsc::unbounded_channel();
-    let privacy_ready = archive
+    let privacy_confirmed = archive
         .meta("chat_privacy_ready_v1")
         .ok()
         .flatten()
         .as_deref()
         == Some("complete");
+    // Only an archive filled before lock state was mirrored needs its lock
+    // state rebuilt from a snapshot; a new link receives it with the first sync.
+    let privacy_snapshot =
+        !privacy_confirmed && archive.chats().is_ok_and(|chats| !chats.is_empty());
     let mut worker = Worker {
-        privacy_ready,
+        privacy_ready: privacy_confirmed,
+        privacy_confirmed,
+        privacy_snapshot,
+        privacy_reveal_at: (!privacy_confirmed).then(|| Instant::now() + PRIVACY_GRACE),
+        privacy_attempts: 0,
+        privacy_warned: false,
         privacy_recovering: false,
         privacy_generation: 0,
         privacy_retry: Instant::now(),
@@ -420,8 +429,12 @@ pub async fn run(
             }
             Some(event) = wa_events.recv() => match event {
                 RuntimeEvent::WhatsApp(event) => worker.handle_wa_event(event).await,
-                RuntimeEvent::PreferencesRecovered { generation, success } => {
-                    worker.preferences_recovered(generation, success);
+                RuntimeEvent::PreferencesRecovered {
+                    generation,
+                    locks,
+                    complete,
+                } => {
+                    worker.preferences_recovered(generation, locks, complete);
                 }
             },
             _ = async {
@@ -435,6 +448,7 @@ pub async fn run(
                 worker.emit_chats();
             }
             _ = tick.tick() => {
+                worker.reveal_unconfirmed_after_grace();
                 worker.refresh_legacy_preferences();
                 worker.expire_older_requests();
                 worker.retry_avatars();
@@ -450,7 +464,23 @@ pub async fn run(
 
 enum RuntimeEvent {
     WhatsApp(Arc<wa_events::Event>),
-    PreferencesRecovered { generation: u64, success: bool },
+    PreferencesRecovered {
+        generation: u64,
+        locks: bool,
+        complete: bool,
+    },
+}
+
+/// How long private content waits for phone lock state before it is shown
+/// unconfirmed. A healthy sync answers well within this.
+const PRIVACY_GRACE: Duration = Duration::from_secs(10);
+
+/// Waits longer after each failed lock-state recovery, so a collection the
+/// server keeps refusing is not rebuilt every few seconds.
+fn privacy_backoff(attempts: u32) -> Duration {
+    Duration::from_secs(30)
+        .saturating_mul(1 << attempts.saturating_sub(1).min(5))
+        .min(Duration::from_secs(15 * 60))
 }
 
 struct UiEvents(mpsc::UnboundedSender<RuntimeEvent>);
@@ -462,7 +492,16 @@ impl wa_events::EventHandler for UiEvents {
 }
 
 struct Worker {
+    /// Private content may reach the UI.
     privacy_ready: bool,
+    /// Phone lock state is known to be mirrored in the archive.
+    privacy_confirmed: bool,
+    /// Lock state must be rebuilt from a snapshot rather than caught up.
+    privacy_snapshot: bool,
+    /// When content is shown even though lock state is still unconfirmed.
+    privacy_reveal_at: Option<Instant>,
+    privacy_attempts: u32,
+    privacy_warned: bool,
     privacy_recovering: bool,
     privacy_generation: u64,
     privacy_retry: Instant,
@@ -992,7 +1031,7 @@ impl Worker {
     }
 
     fn refresh_legacy_preferences(&mut self) {
-        if self.privacy_ready
+        if self.privacy_confirmed
             || self.privacy_recovering
             || Instant::now() < self.privacy_retry
             || !matches!(self.status, LinkStatus::Connected)
@@ -1002,48 +1041,129 @@ impl Worker {
         let Some(client) = self.client.clone() else {
             return;
         };
+        if !self.privacy_ready && self.privacy_reveal_at.is_none() {
+            self.privacy_reveal_at = Some(Instant::now() + PRIVACY_GRACE);
+        }
         self.privacy_recovering = true;
         let sender = self.wa_sender.clone();
         let generation = self.privacy_generation;
-        self.emit(Event::Syncing(true));
+        // Chat locks live in RegularLow. A snapshot discards and rebuilds the
+        // collection, which only an archive that predates lock mirroring needs;
+        // an incremental sync waits for the library's own first sync instead of
+        // racing it.
+        let mode = if self.privacy_snapshot {
+            whatsapp_rust::AppStateResyncMode::Snapshot
+        } else {
+            whatsapp_rust::AppStateResyncMode::Incremental
+        };
+        if !self.privacy_ready {
+            self.emit(Event::Syncing(true));
+        }
+        // An upgraded archive also recovers mute settings and pin order from
+        // RegularHigh once, but only the lock collection holds content back.
+        let mut collections = vec![whatsapp_rust::WAPatchName::RegularLow];
+        if self.privacy_snapshot {
+            collections.push(whatsapp_rust::WAPatchName::RegularHigh);
+        }
         tokio::spawn(async move {
             use whatsapp_rust::WAPatchName;
-            let mut success = true;
-            for name in [WAPatchName::RegularLow, WAPatchName::RegularHigh] {
-                match client.resync_app_state_collection(name).await {
-                    Ok(report) if report.all_synced() => {}
-                    _ => success = false,
+            let (locks, complete) = match client.resync_app_state(collections, mode).await {
+                Ok(report) => {
+                    if !report.all_synced() {
+                        log::warn!(
+                            "chat settings recovery incomplete ({mode:?}): fatal {:?}, retryable {:?}, skipped {:?}",
+                            report.fatal,
+                            report.retryable,
+                            report.skipped
+                        );
+                    }
+                    (
+                        report.synced.contains(&WAPatchName::RegularLow),
+                        report.all_synced(),
+                    )
                 }
-            }
+                Err(error) => {
+                    log::warn!("chat settings recovery failed ({mode:?}): {error}");
+                    (false, false)
+                }
+            };
             // Use the same queue as the replayed mutations, so lock updates
             // are applied before the completion marker can expose chat rows.
             let _ = sender.send(RuntimeEvent::PreferencesRecovered {
                 generation,
-                success,
+                locks,
+                complete,
             });
         });
     }
 
-    fn preferences_recovered(&mut self, generation: u64, success: bool) {
+    /// `locks` says the lock collection synced; `complete` that everything
+    /// requested did, so the one-time recovery need not run again.
+    fn preferences_recovered(&mut self, generation: u64, locks: bool, complete: bool) {
         // A completed task from an unlinked device cannot authorize showing
         // chats belonging to the next linked account.
         if generation != self.privacy_generation {
             return;
         }
         self.privacy_recovering = false;
-        if success
-            && self
-                .archive
-                .set_meta("chat_privacy_ready_v1", "complete")
-                .is_ok()
+        if locks
+            && (!complete
+                || self
+                    .archive
+                    .set_meta("chat_privacy_ready_v1", "complete")
+                    .is_ok())
         {
-            self.privacy_ready = true;
-            self.load_state();
-            self.emit(Event::Syncing(false));
+            // Without `complete` the marker stays unset, so the next start
+            // retries the settings this run could not recover.
+            self.privacy_confirmed = true;
+            self.privacy_snapshot = false;
+            self.privacy_reveal_at = None;
+            self.reveal_private_content();
         } else {
-            self.privacy_retry = Instant::now() + Duration::from_secs(30);
-            log::warn!("chat privacy recovery failed; retrying with chats hidden");
+            self.privacy_attempts = self.privacy_attempts.saturating_add(1);
+            self.privacy_retry = Instant::now() + privacy_backoff(self.privacy_attempts);
+            log::warn!(
+                "chat lock state recovery failed (attempt {}); retrying later",
+                self.privacy_attempts
+            );
+            // Waiting longer does not help a failed sync: show what is known.
+            self.reveal_unconfirmed();
         }
+    }
+
+    fn reveal_unconfirmed_after_grace(&mut self) {
+        if self
+            .privacy_reveal_at
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            self.reveal_unconfirmed();
+        }
+    }
+
+    /// Shows chats whose lock state could not be confirmed yet. Chats already
+    /// known to be locked stay hidden, and later lock updates still apply.
+    fn reveal_unconfirmed(&mut self) {
+        self.privacy_reveal_at = None;
+        if self.privacy_ready {
+            return;
+        }
+        self.reveal_private_content();
+        if !self.privacy_warned {
+            self.privacy_warned = true;
+            self.emit(Event::Info(
+                "Couldn't confirm which chats are locked on your phone yet. Chats locked there may appear until they sync."
+                    .to_owned(),
+            ));
+        }
+    }
+
+    fn reveal_private_content(&mut self) {
+        if self.privacy_ready {
+            return;
+        }
+        self.privacy_ready = true;
+        self.load_state();
+        self.emit(Event::Syncing(self.syncing));
     }
 
     async fn stop_bot(&mut self) {
@@ -1803,6 +1923,11 @@ impl Worker {
         let _ = std::fs::remove_dir_all(self.dirs.media_cache_dir());
         self.emit(Event::Chats(Vec::new()));
         self.privacy_ready = false;
+        self.privacy_confirmed = false;
+        self.privacy_snapshot = false;
+        self.privacy_reveal_at = None;
+        self.privacy_attempts = 0;
+        self.privacy_warned = false;
         self.privacy_recovering = false;
         self.privacy_retry = Instant::now();
         self.set_status(LinkStatus::LoggedOut);
@@ -6606,26 +6731,32 @@ mod tests {
         assert!(matches!(events.try_recv().unwrap(), Event::Error(_)));
     }
 
+    fn unconfirmed(worker: &mut Worker) {
+        worker.privacy_ready = false;
+        worker.privacy_confirmed = false;
+        worker.privacy_reveal_at = Some(Instant::now() + PRIVACY_GRACE);
+    }
+
     #[test]
     fn privacy_recovery_hides_content_until_a_successful_replay() {
         let (mut worker, events, _, _) = receipt_tests::worker();
         const PEER: &str = "fixture@s.whatsapp.net";
-        worker.privacy_ready = false;
+        unconfirmed(&mut worker);
         worker.archive.ensure_chat(PEER, "Fixture").unwrap();
         worker.emit_chats();
         assert!(events.try_recv().is_err());
-        worker.preferences_recovered(0, false);
-        assert!(!worker.privacy_ready);
-        assert!(
+        worker.archive.set_locked_at(PEER, true, 100).unwrap();
+        worker.preferences_recovered(0, true, true);
+        assert!(worker.privacy_ready);
+        assert!(worker.privacy_confirmed);
+        assert_eq!(
             worker
                 .archive
                 .meta("chat_privacy_ready_v1")
                 .unwrap()
-                .is_none()
+                .as_deref(),
+            Some("complete")
         );
-        worker.archive.set_locked_at(PEER, true, 100).unwrap();
-        worker.preferences_recovered(0, true);
-        assert!(worker.privacy_ready);
         let chats = events
             .try_iter()
             .find_map(|event| match event {
@@ -6637,12 +6768,98 @@ mod tests {
     }
 
     #[test]
+    fn failed_privacy_recovery_shows_known_state_and_keeps_retrying() {
+        let (mut worker, events, _, _) = receipt_tests::worker();
+        const PEER: &str = "fixture@s.whatsapp.net";
+        unconfirmed(&mut worker);
+        worker.archive.ensure_chat(PEER, "Fixture").unwrap();
+        worker.archive.set_locked_at(PEER, true, 100).unwrap();
+        worker.preferences_recovered(0, false, false);
+        assert!(worker.privacy_ready);
+        assert!(!worker.privacy_confirmed);
+        assert!(worker.privacy_retry > Instant::now());
+        assert!(
+            worker
+                .archive
+                .meta("chat_privacy_ready_v1")
+                .unwrap()
+                .is_none()
+        );
+        let events: Vec<_> = events.try_iter().collect();
+        let chats = events
+            .iter()
+            .find_map(|event| match event {
+                Event::Chats(chats) => Some(chats),
+                _ => None,
+            })
+            .unwrap();
+        assert!(chats[0].locked);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, Event::Info(_)))
+                .count(),
+            1
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, Event::Syncing(true)))
+        );
+        // A second failure warns no further.
+        worker.preferences_recovered(0, false, false);
+        assert_eq!(worker.privacy_attempts, 2);
+    }
+
+    #[test]
+    fn partial_settings_recovery_confirms_locks_but_retries_next_start() {
+        let (mut worker, _events, _, _) = receipt_tests::worker();
+        unconfirmed(&mut worker);
+        worker.preferences_recovered(0, true, false);
+        assert!(worker.privacy_ready);
+        assert!(worker.privacy_confirmed);
+        assert!(
+            worker
+                .archive
+                .meta("chat_privacy_ready_v1")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn unconfirmed_privacy_shows_content_after_the_grace_period() {
+        let (mut worker, events, _, _) = receipt_tests::worker();
+        unconfirmed(&mut worker);
+        worker.reveal_unconfirmed_after_grace();
+        assert!(!worker.privacy_ready);
+        assert!(events.try_recv().is_err());
+        worker.privacy_reveal_at = Some(Instant::now());
+        worker.reveal_unconfirmed_after_grace();
+        assert!(worker.privacy_ready);
+        assert!(worker.privacy_reveal_at.is_none());
+        assert!(
+            events
+                .try_iter()
+                .any(|event| matches!(event, Event::Info(_)))
+        );
+    }
+
+    #[test]
+    fn privacy_recovery_backs_off() {
+        assert_eq!(privacy_backoff(1), Duration::from_secs(30));
+        assert_eq!(privacy_backoff(2), Duration::from_secs(60));
+        assert_eq!(privacy_backoff(4), Duration::from_secs(240));
+        assert_eq!(privacy_backoff(40), Duration::from_secs(15 * 60));
+    }
+
+    #[test]
     fn stale_privacy_recovery_cannot_expose_a_different_linked_account() {
         let (mut worker, events, _, _) = receipt_tests::worker();
-        worker.privacy_ready = false;
+        unconfirmed(&mut worker);
         worker.privacy_recovering = true;
         worker.privacy_generation = 1;
-        worker.preferences_recovered(0, true);
+        worker.preferences_recovered(0, true, true);
         assert!(!worker.privacy_ready);
         assert!(worker.privacy_recovering);
         assert!(events.try_recv().is_err());
@@ -7027,6 +7244,11 @@ mod receipt_tests {
         let root = std::env::temp_dir().join(format!("zapfast-worker-test-{}", std::process::id()));
         let worker = Worker {
             privacy_ready: true,
+            privacy_confirmed: true,
+            privacy_snapshot: false,
+            privacy_reveal_at: None,
+            privacy_attempts: 0,
+            privacy_warned: false,
             privacy_recovering: false,
             privacy_generation: 0,
             privacy_retry: Instant::now(),
