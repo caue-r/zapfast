@@ -418,6 +418,18 @@ pub async fn run(
     // state rebuilt from a snapshot; a new link receives it with the first sync.
     let privacy_snapshot =
         !privacy_confirmed && archive.chats().is_ok_and(|chats| !chats.is_empty());
+    // A new link receives the phone's favorites with its first sync; only an
+    // archive filled before favorites were followed needs them replayed.
+    let favorites_recovered = archive
+        .meta(stickers::FAVORITES_RECOVERED)
+        .ok()
+        .flatten()
+        .as_deref()
+        == Some("complete")
+        || (archive.chats().is_ok_and(|chats| chats.is_empty())
+            && archive
+                .set_meta(stickers::FAVORITES_RECOVERED, "complete")
+                .is_ok());
     let mut worker = Worker {
         privacy_ready: privacy_confirmed,
         privacy_confirmed,
@@ -467,6 +479,8 @@ pub async fn run(
         favorite_fetches: HashSet::new(),
         favorites_pushing: false,
         favorites_again: false,
+        favorites_recovered,
+        favorites_recovering: false,
         downloads: HashSet::new(),
         read_sync: ReadSync::default(),
         poll_decrypting: 0,
@@ -696,6 +710,10 @@ struct Worker {
     favorites_pushing: bool,
     /// More favorite changes arrived while a push was running.
     favorites_again: bool,
+    /// The phone's favorites from before ZapFast followed them were replayed.
+    favorites_recovered: bool,
+    /// That replay is running.
+    favorites_recovering: bool,
     /// Active attachment downloads by chat, message id, and carousel card.
     downloads: HashSet<(ChatId, String, Option<usize>)>,
 }
@@ -1902,6 +1920,8 @@ impl Worker {
                 self.pump_read_sync();
                 self.poll_history.reconnect(Instant::now());
                 self.push_favorites();
+                self.fetch_missing_favorites();
+                self.recover_favorites();
                 let _ = self.archive.retry_poll_votes();
                 self.pump_poll_votes();
                 if let Some(client) = self.client.clone() {
@@ -3981,6 +4001,7 @@ impl Worker {
             } => self.favorite_pushed(&hash, updated_at, result),
             Command::FavoritesPushed => self.favorites_pushed(),
             Command::FavoriteFetched { hash, result } => self.favorite_fetched(&hash, result),
+            Command::FavoritesRecovered { complete } => self.favorites_recovered(complete),
             Command::ImportStickerUrl { url } => {
                 let commands = self.commands.clone();
                 let packs = self.packs_dir();
@@ -9219,6 +9240,8 @@ mod receipt_tests {
             favorite_fetches: HashSet::new(),
             favorites_pushing: false,
             favorites_again: false,
+            favorites_recovered: true,
+            favorites_recovering: false,
             downloads: HashSet::new(),
             read_sync: ReadSync::default(),
             poll_decrypting: 0,

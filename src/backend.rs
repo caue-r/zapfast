@@ -328,6 +328,10 @@ pub enum Command {
     },
     /// Internal: every queued favorite change was sent.
     FavoritesPushed,
+    /// Internal: the one-time replay of the phone's favorites finished.
+    FavoritesRecovered {
+        complete: bool,
+    },
     /// Internal: a favorite from the phone finished downloading.
     FavoriteFetched {
         hash: String,
