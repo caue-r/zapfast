@@ -154,7 +154,10 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   stickers, or GIFs. A reply never goes out without its quote: if the
   original is no longer available on this computer, nothing is sent, the text
   or attachments return to the composer, and a voice message waits above it
-  to be sent again or discarded. Cancel the reply to send without a quote. The same right-click menu copies a message's ID, which
+  to be sent again or discarded. Cancel the reply to send without a quote.
+  Quotes carry a bar and name in the quoted person's colour; clicking one
+  scrolls back to the original, which flashes briefly, as a search result
+  does. The same right-click menu copies a message's ID, which
   helps when looking one up for a bug report.
   Opening a message's context menu outlines that message until the menu closes.
   The full reaction picker stays beside the menu and adds a target preview.

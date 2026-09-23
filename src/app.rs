@@ -385,6 +385,9 @@ pub struct App {
     pub at_bottom: bool,
     /// Message id to scroll into view.
     pub scroll_anchor: Option<String>,
+    /// A message reached from a quote or a search result, which flashes
+    /// once it is in view so the eye finds it.
+    pub jump_highlight: Option<JumpHighlight>,
     pub focus_composer: bool,
     pub focus_search: bool,
     pub quit_requested: bool,
@@ -410,6 +413,46 @@ pub struct App {
     /// Unread count on the taskbar icon, where the desktop reads it. `None`
     /// for demo and test runs, which must not touch the real taskbar.
     badge: Option<crate::notify::Badge>,
+}
+
+/// A message that flashes after a jump to it, as WhatsApp does.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JumpHighlight {
+    pub chat: ChatId,
+    pub message: String,
+    /// When the message came into view, in egui's input time; `None` until
+    /// then.
+    pub since: Option<f64>,
+}
+
+impl JumpHighlight {
+    /// How long the flash lasts, in seconds.
+    pub const DURATION: f64 = 2.0;
+
+    pub fn new(chat: ChatId, message: String) -> Self {
+        Self {
+            chat,
+            message,
+            since: None,
+        }
+    }
+
+    /// The flash's strength `elapsed` seconds after the message came into
+    /// view: a quick rise, a hold, then a fade to nothing.
+    pub fn strength(elapsed: f64) -> f32 {
+        const RISE: f64 = 0.15;
+        const HOLD: f64 = 0.9;
+        let strength = if elapsed < 0.0 {
+            0.0
+        } else if elapsed < RISE {
+            elapsed / RISE
+        } else if elapsed < HOLD {
+            1.0
+        } else {
+            1.0 - (elapsed - HOLD) / (Self::DURATION - HOLD)
+        };
+        strength.clamp(0.0, 1.0) as f32
+    }
 }
 
 /// Attachment pending in the composer.
@@ -653,6 +696,7 @@ impl App {
             scroll_to_bottom: true,
             at_bottom: true,
             scroll_anchor: None,
+            jump_highlight: None,
             focus_composer: false,
             focus_search: false,
             quit_requested: false,
@@ -2431,6 +2475,7 @@ impl App {
             self.reaction_target = None;
             self.reaction_anchor = None;
             self.emoji_jump = None;
+            self.jump_highlight = None;
             if let Some(previous) = self.open_chat.take() {
                 let draft = std::mem::take(&mut self.composer);
                 // Discard an unfinished edit instead of keeping it as a draft.
@@ -2934,6 +2979,7 @@ impl App {
                 self.scroll_to_bottom = false;
                 self.at_bottom = false;
                 self.scroll_anchor = Some(message.clone());
+                self.jump_highlight = Some(JumpHighlight::new(chat.clone(), message.clone()));
                 let conversation = self.conversations.entry(chat.clone()).or_default();
                 if conversation.message(&message).is_none()
                     && !conversation.loading_older
@@ -3898,11 +3944,12 @@ impl App {
                     // Load older archive pages toward the target.
                     conversation.loading_older = true;
                     self.backend.send(Command::LoadUntil {
-                        chat,
+                        chat: chat.clone(),
                         id: id.clone(),
                         before: (oldest.timestamp, oldest.id.clone()),
                     });
                 }
+                self.jump_highlight = Some(JumpHighlight::new(chat, id.clone()));
                 self.scroll_anchor = Some(id);
             }
             Action::Search(text) => {
@@ -7022,6 +7069,55 @@ mod tests {
         assert_eq!(ids, vec!["a", "b", "c"]);
         conversation.merge(vec![message("c", "c", 3)], false);
         assert_eq!(conversation.messages.len(), 3);
+    }
+
+    #[test]
+    fn a_jump_flash_rises_holds_and_fades_out() {
+        assert_eq!(JumpHighlight::strength(-1.0), 0.0);
+        assert_eq!(JumpHighlight::strength(0.0), 0.0);
+        assert_eq!(JumpHighlight::strength(0.5), 1.0);
+        let fading = JumpHighlight::strength(1.5);
+        assert!(fading > 0.0 && fading < 1.0, "{fading}");
+        assert_eq!(JumpHighlight::strength(JumpHighlight::DURATION), 0.0);
+        assert_eq!(JumpHighlight::strength(10.0), 0.0);
+    }
+
+    #[test]
+    fn quotes_and_search_hits_flash_their_message_until_the_chat_changes() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let (ada, bob) = ("1@s.whatsapp.net", "2@s.whatsapp.net");
+        for chat in [ada, bob] {
+            app.chats.push(Chat::new(chat.into(), "Chat".into()));
+            app.conversations.insert(
+                chat.into(),
+                Conversation {
+                    requested: true,
+                    complete: true,
+                    messages: vec![message(chat, "old", 10)],
+                    ..Default::default()
+                },
+            );
+        }
+        app.apply(
+            Action::OpenMessage {
+                chat: ada.into(),
+                message: "old".into(),
+            },
+            &ctx,
+        );
+        assert_eq!(
+            app.jump_highlight,
+            Some(JumpHighlight::new(ada.into(), "old".into()))
+        );
+        app.jump_highlight = None;
+        app.apply(Action::ScrollTo("old".into()), &ctx);
+        assert_eq!(
+            app.jump_highlight,
+            Some(JumpHighlight::new(ada.into(), "old".into()))
+        );
+        app.open_chat(bob.into());
+        assert_eq!(app.jump_highlight, None);
     }
 
     #[test]

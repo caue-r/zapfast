@@ -975,6 +975,39 @@ fn sticker_sample(app: &mut App, shelf: crate::model::StickerShelf, search: &str
     app.sticker_search = search.to_owned();
 }
 
+/// Opens the sample group with an own reply quoting another member, beside
+/// the member's reply quoting a third.
+fn quote_sample(app: &mut App) {
+    let group = SAMPLES[1].id;
+    app.open_chat = Some(group.to_owned());
+    let Some(conversation) = app.conversations.get_mut(group) else {
+        return;
+    };
+    let quoted = conversation
+        .messages
+        .iter()
+        .position(|row| row.id == "group-reply");
+    if let Some(index) = quoted {
+        let original = &conversation.messages[index];
+        let (sender, sender_name) = (original.sender.clone(), original.sender_name.clone());
+        let mut reply = message(
+            group,
+            "quote-own",
+            true,
+            original.timestamp + 30,
+            Content::text("See you there!"),
+        );
+        reply.quoted = Some(Quoted {
+            id: "group-reply".into(),
+            sender,
+            sender_name,
+            summary: "will do, front row".into(),
+            mentions: Vec::new(),
+        });
+        conversation.messages.insert(index + 1, reply);
+    }
+}
+
 /// A Recent shelf of animated stickers, more frames than the animation cache
 /// holds at once, for the picker's paused tiles (#165).
 fn animated_sticker_sample(app: &mut App) {
@@ -1859,6 +1892,23 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         .unwrap_or_default();
                     app.selection = Some((chat, ids));
                 }
+            }
+            "quotes" => {
+                quote_sample(app);
+                app.scroll_to_bottom = false;
+                app.at_bottom = false;
+                app.scroll_anchor = Some("quote-own".into());
+            }
+            "quote-jump" => {
+                // A clicked quote has scrolled back to the message it quotes,
+                // which flashes.
+                quote_sample(app);
+                let group = SAMPLES[1].id;
+                let target = format!("{group}-3");
+                app.scroll_to_bottom = false;
+                app.at_bottom = false;
+                app.scroll_anchor = Some(target.clone());
+                app.jump_highlight = Some(crate::app::JumpHighlight::new(group.to_owned(), target));
             }
             "unread-divider" => {
                 let id = SAMPLES[1].id.to_owned();
@@ -3534,6 +3584,8 @@ mod tests {
             "delete-chat",
             "invite",
             "unread-divider",
+            "quotes",
+            "quote-jump",
             "select",
             "new-contact",
             "light",
@@ -5755,6 +5807,130 @@ mod tests {
         );
         assert!(app.editing.is_none());
         assert_eq!(app.composer, "draft");
+    }
+
+    #[test]
+    fn a_quote_bar_takes_the_quoted_senders_colour() {
+        let mut app = app();
+        apply_flags(&mut app, Some("quotes"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut shapes = Vec::new();
+        for _ in 0..3 {
+            shapes = frame_sized(&mut app, &ctx, 780.0, Vec::new());
+        }
+        let group = SAMPLES[1].id;
+        let quoted = |id: &str| {
+            app.conversations[group]
+                .messages
+                .iter()
+                .find(|row| row.id == id)
+                .and_then(|row| row.quoted.clone())
+                .expect("a quote")
+                .sender
+        };
+        let palette = app.palette;
+        let bar = |sender: &str, bubble: egui::Color32| {
+            crate::theme::readable_on(
+                bubble,
+                palette.sender(crate::util::hue(sender)),
+                palette.text,
+                3.0,
+            )
+        };
+        let expected = [
+            bar(&quoted("group-reply"), palette.bubble_in),
+            bar(&quoted("quote-own"), palette.bubble_out),
+        ];
+        fn bars(shape: &egui::Shape, out: &mut Vec<egui::Color32>) {
+            match shape {
+                egui::Shape::Rect(rect) if (rect.rect.width() - 4.0).abs() < 0.01 => {
+                    out.push(rect.fill)
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| bars(shape, out)),
+                _ => {}
+            }
+        }
+        let mut drawn = Vec::new();
+        for clipped in &shapes {
+            bars(&clipped.shape, &mut drawn);
+        }
+        for colour in expected {
+            assert!(drawn.contains(&colour), "{colour:?} not among {drawn:?}");
+        }
+    }
+
+    #[test]
+    fn a_message_reached_from_a_quote_flashes_across_the_view_then_fades() {
+        fn rects(shape: &egui::Shape, out: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match shape {
+                egui::Shape::Rect(rect) => out.push((rect.rect, rect.fill)),
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| rects(shape, out)),
+                _ => {}
+            }
+        }
+        fn frame_at(
+            app: &mut App,
+            ctx: &egui::Context,
+            time: f64,
+        ) -> Vec<(egui::Rect, egui::Color32)> {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1180.0, 780.0),
+                    )),
+                    time: Some(time),
+                    ..Default::default()
+                },
+                |ui| {
+                    let ctx = ui.ctx().clone();
+                    app.background_frame(&ctx);
+                    app.frame_ui(ui);
+                },
+            );
+            output.textures_delta.clear();
+            let mut out = Vec::new();
+            for clipped in &output.shapes {
+                rects(&clipped.shape, &mut out);
+            }
+            out
+        }
+        let mut app = app();
+        apply_flags(&mut app, Some("quote-jump"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        for _ in 0..3 {
+            frame_at(&mut app, &ctx, 10.0);
+        }
+        let since = app
+            .jump_highlight
+            .as_ref()
+            .and_then(|jump| jump.since)
+            .expect("the quoted message came into view");
+        let band = app.palette.accent.gamma_multiply(0.22);
+        let shown = frame_at(&mut app, &ctx, since + 0.5);
+        let widest = shown
+            .iter()
+            .filter(|(_, fill)| *fill == band)
+            .map(|(rect, _)| rect.width())
+            .fold(0.0, f32::max);
+        assert!(
+            widest > 600.0,
+            "the band spans the message view, not the bubble: {widest}"
+        );
+        frame_at(
+            &mut app,
+            &ctx,
+            since + crate::app::JumpHighlight::DURATION + 0.1,
+        );
+        assert!(app.jump_highlight.is_none(), "the flash ends");
+        let after = frame_at(
+            &mut app,
+            &ctx,
+            since + crate::app::JumpHighlight::DURATION + 0.2,
+        );
+        assert!(!after.iter().any(|(_, fill)| *fill == band));
     }
 
     /// Runs one frame of the given height with these input events.
