@@ -3254,6 +3254,27 @@ mod tests {
             command: !cfg!(target_os = "macos"),
             ..Default::default()
         };
+        // The picture decodes on a loader thread; wait until its fitted
+        // scale is known so zooming starts from a settled size.
+        let loaded = |app: &App| {
+            let path = app.image_preview.as_ref().unwrap().path().to_owned();
+            matches!(
+                ctx.try_load_texture(
+                    &crate::util::image_uri(&path),
+                    egui::TextureOptions::default(),
+                    egui::SizeHint::default(),
+                ),
+                Ok(egui::load::TexturePoll::Ready { .. })
+            )
+        };
+        for _ in 0..200 {
+            render(&mut app, &ctx);
+            if loaded(&app) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        render(&mut app, &ctx);
         let fitted = app.image_preview.as_ref().unwrap().scale();
         frame_with(&mut app, &ctx, vec![key(egui::Key::Equals, ctrl_shift)]);
         render(&mut app, &ctx);
