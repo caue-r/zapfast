@@ -1050,7 +1050,7 @@ impl App {
             counted.push(if count == 1 {
                 name
             } else {
-                format!("{name} ×{count}")
+                format!("{name} x{count}")
             });
         }
         numbers.sort();
@@ -6163,7 +6163,7 @@ mod name_tests {
         chat.participants.push(app.me.clone().unwrap());
         for saved_names in [false, true] {
             app.settings.names_from_contacts = saved_names;
-            assert_eq!(app.participant_names(&chat), "Andrea ×3, Giacomo, You");
+            assert_eq!(app.participant_names(&chat), "Andrea x3, Giacomo, You");
             assert_eq!(app.chat_title(&chat), app.participant_names(&chat));
             chat.name.clear();
             assert_eq!(app.chat_title(&chat), app.participant_names(&chat));
