@@ -680,6 +680,7 @@ impl App {
             return;
         }
         let (name, is_group) = (self.chat_title(chat), chat.is_group());
+        let chat_sound = chat.notification_sound.clone();
         let sender = self.display_name_or(&message.sender, message.sender_name.as_deref());
         let (title, body) =
             crate::notify::lines(&name, is_group, &sender, &self.message_text(message));
@@ -692,10 +693,10 @@ impl App {
             .or_else(|| self.avatar(&sender))
             .or_else(|| self.cached_avatar(&sender));
         let waker = self.waker.clone();
-        let sound = if is_group {
-            self.settings.group_sound.clone()
-        } else {
-            self.settings.message_sound.clone()
+        let sound = match chat_sound {
+            Some(sound) => sound,
+            None if is_group => self.settings.group_sound.clone(),
+            None => self.settings.message_sound.clone(),
         };
         self.notifications.show(
             title,
@@ -1531,6 +1532,13 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::ChatSoundPicked { chat, path } => {
+                    crate::notify::play_sound(path.clone());
+                    self.actions.push(Action::SetChatSound {
+                        chat,
+                        sound: Some(crate::settings::NotificationSound::Custom(path)),
+                    });
+                }
                 Event::DownloadFolderPicked(path) => {
                     self.actions.push(Action::SetDownloadFolder(Some(path)));
                 }
@@ -3380,6 +3388,13 @@ impl App {
             }
             Action::PreviewSound(path) => crate::notify::play_sound(path),
             Action::PickDownloadFolder => self.backend.send(Command::PickDownloadFolder),
+            Action::SetChatSound { chat, sound } => {
+                if let Some(known) = self.chat_mut(&chat) {
+                    known.notification_sound = sound.clone();
+                }
+                self.backend.send(Command::SetChatSound { chat, sound });
+            }
+            Action::PickChatSound(chat) => self.backend.send(Command::PickChatSound(chat)),
             Action::SetDownloadFolder(folder) => {
                 self.settings.download_folder = folder.clone();
                 self.mark_settings_dirty();

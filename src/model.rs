@@ -102,6 +102,8 @@ pub struct Chat {
     pub locked: bool,
     /// Disappearing-message duration in seconds, if enabled.
     pub ephemeral_expiration: Option<u32>,
+    /// This chat's own notification sound; `None` follows Settings.
+    pub notification_sound: Option<crate::settings::NotificationSound>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -133,6 +135,7 @@ impl Chat {
             read_only: false,
             locked: false,
             ephemeral_expiration: None,
+            notification_sound: None,
         }
     }
 
@@ -999,6 +1002,13 @@ pub enum Action {
     PickNotificationSound {
         group: bool,
     },
+    /// Sets a chat's own notification sound; `None` follows Settings.
+    SetChatSound {
+        chat: ChatId,
+        sound: Option<crate::settings::NotificationSound>,
+    },
+    /// Asks for an audio file for one chat's notifications.
+    PickChatSound(ChatId),
     /// Asks for a folder for new downloads.
     PickDownloadFolder,
     /// Sets or resets (`None`) the folder for new downloads.

@@ -225,7 +225,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   unregistered development builds skip notifications if that identity is unavailable.
   **Message sound** and **Group sound** in Settings choose the system's
   notification sound, no sound, or an audio file (WAV, MP3, or OGG Vorbis)
-  that ZapFast plays itself.
+  that ZapFast plays itself. **Notification sound** in a chat's right-click
+  menu gives that chat its own sound, stored in the encrypted archive.
 - **Update notices.** ZapFast checks GitHub once a day and shows a download
   link when a newer release is available. You can turn this off in Settings.
 - **Themes.** Light, dark, follow the system, or a local JSON palette. Native

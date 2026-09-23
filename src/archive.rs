@@ -117,7 +117,8 @@ END;
 const CHAT_COLUMNS: &str =
     "c.id, c.name, c.kind, c.last_activity, c.unread, c.archived, c.pinned, c.muted_until,
                     m.from_me, m.sender_name, m.content, m.status, m.sender, c.participants, c.read_only,
-                    c.pinned_at, c.ephemeral_expiration, c.locked, c.group_subject_known";
+                    c.pinned_at, c.ephemeral_expiration, c.locked, c.group_subject_known,
+                    c.notification_sound";
 
 /// Adds columns introduced after the initial schema when missing.
 const MIGRATIONS: &[(&str, &str, &str)] = &[
@@ -138,6 +139,7 @@ const MIGRATIONS: &[(&str, &str, &str)] = &[
     ("chats", "locked", "INTEGER NOT NULL DEFAULT 0"),
     ("chats", "lock_updated_at", "INTEGER"),
     ("chats", "archive_updated_at", "INTEGER"),
+    ("chats", "notification_sound", "TEXT"),
     ("chats", "group_subject_known", "INTEGER NOT NULL DEFAULT 0"),
 ];
 const CHAT_JOIN: &str = "FROM chats c
@@ -182,6 +184,9 @@ fn chat_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
         ephemeral_expiration: row
             .get::<_, Option<u32>>(16)?
             .filter(|expiration| *expiration != 0),
+        notification_sound: row
+            .get::<_, Option<String>>(19)?
+            .and_then(|sound| serde_json::from_str(&sound).ok()),
     })
 }
 
@@ -350,6 +355,20 @@ impl Archive {
             "UPDATE chats SET archived = ?2, archive_updated_at = ?3 WHERE id = ?1
                 AND (archive_updated_at IS NULL OR archive_updated_at <= ?3)",
             params![id, archived, timestamp],
+        )?;
+        Ok(())
+    }
+
+    /// A chat's own notification sound; `None` follows Settings.
+    pub fn set_notification_sound(
+        &self,
+        id: &str,
+        sound: Option<&crate::settings::NotificationSound>,
+    ) -> Result<()> {
+        let sound = sound.map(|sound| serde_json::to_string(sound).unwrap_or_default());
+        self.connection.execute(
+            "UPDATE chats SET notification_sound = ?2 WHERE id = ?1",
+            params![id, sound],
         )?;
         Ok(())
     }
@@ -2081,6 +2100,23 @@ pub(crate) mod tests {
             archive.put_lid("2", "1").unwrap();
             assert!(!archive.chat(phone).unwrap().unwrap().locked);
         }
+    }
+
+    #[test]
+    fn a_chat_keeps_its_own_notification_sound() {
+        use crate::settings::NotificationSound;
+        let archive = Archive::in_memory().unwrap();
+        let id = "1@s.whatsapp.net";
+        archive.ensure_chat(id, "Ada").unwrap();
+        assert_eq!(archive.chat(id).unwrap().unwrap().notification_sound, None);
+        let sound = NotificationSound::Custom("/sounds/ada.ogg".into());
+        archive.set_notification_sound(id, Some(&sound)).unwrap();
+        assert_eq!(
+            archive.chat(id).unwrap().unwrap().notification_sound,
+            Some(sound)
+        );
+        archive.set_notification_sound(id, None).unwrap();
+        assert_eq!(archive.chat(id).unwrap().unwrap().notification_sound, None);
     }
 
     #[test]

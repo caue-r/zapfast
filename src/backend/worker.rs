@@ -3405,6 +3405,24 @@ impl Worker {
                 }
                 self.download_folder = folder;
             }
+            Command::SetChatSound { chat, sound } => {
+                let _ = self.archive.set_notification_sound(&chat, sound.as_ref());
+                self.emit_chat(&chat);
+            }
+            Command::PickChatSound(chat) => {
+                let events = self.events.clone();
+                let waker = self.waker.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_title("Choose a notification sound")
+                        .add_filter("Audio", &["wav", "mp3", "ogg", "oga"])
+                        .pick_file()
+                    {
+                        let _ = events.send(Event::ChatSoundPicked { chat, path });
+                        waker.wake();
+                    }
+                });
+            }
             Command::PickDownloadFolder => {
                 let events = self.events.clone();
                 let waker = self.waker.clone();

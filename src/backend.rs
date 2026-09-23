@@ -302,6 +302,13 @@ pub enum Command {
     PickNotificationSound {
         group: bool,
     },
+    /// Stores a chat's own notification sound.
+    SetChatSound {
+        chat: ChatId,
+        sound: Option<crate::settings::NotificationSound>,
+    },
+    /// Asks for an audio file for one chat's notifications.
+    PickChatSound(ChatId),
     /// Asks for a folder for new downloads.
     PickDownloadFolder,
     /// Where new downloads go; `None` is the cache.
@@ -596,6 +603,11 @@ pub enum Event {
     /// Whether account privacy disables direct-chat read receipts.
     ReceiptsPrivacy {
         disabled: bool,
+    },
+    /// An audio file chosen for one chat's notifications.
+    ChatSoundPicked {
+        chat: ChatId,
+        path: std::path::PathBuf,
     },
     /// A folder chosen for new downloads.
     DownloadFolderPicked(std::path::PathBuf),

@@ -1004,6 +1004,7 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
             }
         }
     }
+    sound_menu(app, ui, palette, chat);
     if widgets::menu_item(
         ui,
         palette,
@@ -1042,6 +1043,39 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
                 chat.id.clone(),
             )));
     }
+}
+
+/// A chat's own notification sound, overriding Settings for this chat.
+fn sound_menu(app: &mut App, ui: &mut egui::Ui, palette: &Palette, chat: &Chat) {
+    use crate::settings::NotificationSound;
+    ui.menu_button("Notification sound", |ui| {
+        let current = chat.notification_sound.clone();
+        for (sound, label) in [
+            (None, "Default"),
+            (Some(NotificationSound::System), "System sound"),
+            (Some(NotificationSound::None), "No sound"),
+        ] {
+            let checked = current == sound;
+            if widgets::menu_item(ui, palette, checked.then_some(Icon::Check), label) {
+                app.actions.push(Action::SetChatSound {
+                    chat: chat.id.clone(),
+                    sound,
+                });
+                ui.close();
+            }
+        }
+        if let Some(NotificationSound::Custom(path)) = &current {
+            let name = path.file_name().map_or_else(
+                || "Custom".to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            widgets::menu_item(ui, palette, Some(Icon::Check), &name);
+        }
+        if widgets::menu_item(ui, palette, None, "Choose a file…") {
+            app.actions.push(Action::PickChatSound(chat.id.clone()));
+            ui.close();
+        }
+    });
 }
 
 #[cfg(test)]
