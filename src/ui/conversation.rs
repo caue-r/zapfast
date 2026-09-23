@@ -1289,6 +1289,8 @@ struct View<'a> {
     /// Demo/test: keep this message's context menu open.
     open_menu: Option<&'a str>,
     reaction: Option<&'a str>,
+    /// The reaction picker was opened from the message's context menu.
+    reaction_menu: bool,
     reaction_emoji: &'a [(String, u32)],
     keyboard_navigation: &'a std::cell::Cell<bool>,
     /// Resolves a name with the message's stored name as fallback.
@@ -1348,6 +1350,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             .as_ref()
             .filter(|(id, _)| id == &chat.id)
             .map(|(_, message)| message.as_str()),
+        reaction_menu: app.reaction_beside_menu,
         reaction_emoji: &app.settings.reaction_emoji,
         keyboard_navigation: &keyboard_navigation,
         names_or: &names_or,
@@ -1774,6 +1777,7 @@ fn open_reaction_picker_action(chat: &str, message: &str) -> Action {
     Action::OpenReactionPicker {
         chat: chat.to_owned(),
         message: message.to_owned(),
+        beside_menu: false,
     }
 }
 
@@ -2439,7 +2443,9 @@ fn bubble_frame(
             );
         }
     }
-    let reacting = view.reaction == Some(message.id.as_str());
+    // The context menu stays open beside the picker only when the picker came
+    // from the menu itself.
+    let reacting = view.reaction_menu && view.reaction == Some(message.id.as_str());
     // Inner widgets own their clicks, so this fires only on the bubble's padding
     // and footer. Double-click on the body keeps selecting the word.
     reply_on_double_click(&bubble, message, actions);
@@ -2987,6 +2993,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
                 actions.push(Action::OpenReactionPicker {
                     chat: chat.clone(),
                     message: message.id.clone(),
+                    beside_menu: true,
                 });
             }
         },
@@ -5507,7 +5514,7 @@ mod tests {
         let action = open_reaction_picker_action("chat@example", "message-42");
         assert!(matches!(
             action,
-            Action::OpenReactionPicker { chat, message }
+            Action::OpenReactionPicker { chat, message, beside_menu: false }
                 if chat == "chat@example" && message == "message-42"
         ));
     }

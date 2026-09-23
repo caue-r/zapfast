@@ -1857,6 +1857,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "react-picker" => {
                 let chat = SAMPLES[0].id.to_owned();
                 app.reaction_target = Some((chat, "ada-link".into()));
+                app.reaction_beside_menu = true;
                 app.scroll_to_bottom = false;
                 app.scroll_anchor = Some("ada-link".into());
                 app.picker_focus = true;
@@ -1878,6 +1879,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "react-picker-empty" => {
                 let chat = SAMPLES[0].id.to_owned();
                 app.reaction_target = Some((chat, "ada-link".into()));
+                app.reaction_beside_menu = true;
                 app.scroll_to_bottom = false;
                 app.scroll_anchor = Some("ada-link".into());
                 app.picker_focus = true;
@@ -3817,6 +3819,14 @@ mod tests {
             app.open_message_menu.is_none(),
             "the click opens the picker, not the context menu"
         );
+        for _ in 0..3 {
+            render(&mut app, &ctx);
+        }
+        assert!(
+            !egui::Popup::is_id_open(&ctx, id.with("popup")),
+            "the context menu stays closed beside a picker opened from hover"
+        );
+        assert!(app.reaction_target.is_some(), "the picker stays open");
         assert!(app.reply_to.is_none(), "the click does not start a reply");
     }
 
