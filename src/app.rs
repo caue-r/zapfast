@@ -6657,7 +6657,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_f_searches_the_list_and_ctrl_shift_f_the_open_chat() {
+    fn ctrl_f_searches_the_open_chat_and_ctrl_k_the_list() {
         let mut app = app();
         let ctx = egui::Context::default();
         // Without an open chat there is nothing to search inside.
@@ -6667,7 +6667,7 @@ mod tests {
         app.apply(Action::OpenChatSearch, &ctx);
         assert!(app.chat_search_open);
         assert!(app.chat_search_focus);
-        // Ctrl+F keeps searching the chat list, and closes the chat's bar.
+        // Ctrl+K searches the chat list, and closes the chat's bar.
         app.apply(Action::FocusSearch, &ctx);
         app.apply_actions(&ctx);
         assert!(app.focus_search);
