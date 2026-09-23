@@ -120,9 +120,10 @@ notify = "8.2"
 zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-tokio-crypto-rust"] }
 # Linux status-notifier tray item over D-Bus.
 ksni = { version = "0.3", features = ["blocking"] }
-# Pauses MPRIS media players while recording or playing voice messages.
+# Pauses MPRIS media players while recording or playing voice messages, and
+# emits the Unity Launcher API signal launchers show as a taskbar badge.
 # Already in the tree through notify-rust and ksni.
-zbus = { version = "5.19", default-features = false, features = ["tokio"] }
+zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }
 # Reads the time locale's clock format.
 libc = "0.2"
 # Asks the Wayland compositor whether it reports hidden windows as suspended
