@@ -9,6 +9,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::model::{Chat, ChatKind, Contact, Content, Delivery, LastMessage, Message};
 
+mod drafts;
 mod encryption;
 mod polls;
 mod receipts;
@@ -259,6 +260,7 @@ impl Archive {
         connection.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
         connection.execute_batch(SCHEMA)?;
         connection.execute_batch(polls::SCHEMA)?;
+        connection.execute_batch(drafts::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -1172,7 +1174,13 @@ impl Archive {
 
     /// Drops every chat-scoped row outside the `chats` table itself.
     fn purge_chat_rows(&self, chat: &str) -> Result<()> {
-        for table in ["messages", "group_receipts", "polls", "poll_history"] {
+        for table in [
+            "messages",
+            "group_receipts",
+            "polls",
+            "poll_history",
+            "drafts",
+        ] {
             self.connection.execute(
                 &format!("DELETE FROM {table} WHERE chat = ?1"),
                 params![chat],
@@ -1477,7 +1485,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids;",
+            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts;",
         )
     }
 }
@@ -1825,7 +1833,8 @@ pub(crate) mod tests {
                  INSERT INTO poll_history (chat, id) VALUES ('{chat}', 'p1');
                  INSERT INTO poll_votes (chat, poll, voter, sender, update_id, at, from_me)
                      VALUES ('{chat}', 'p1', '{chat}', '{chat}', 'u1', 150, 0);
-                 INSERT INTO group_receipts (chat, id, recipient) VALUES ('{chat}', 'm1', '{chat}');"
+                 INSERT INTO group_receipts (chat, id, recipient) VALUES ('{chat}', 'm1', '{chat}');
+                 INSERT INTO drafts (chat, text, updated_at) VALUES ('{chat}', 'unsent', 150);"
             ))
             .expect("poll and receipt rows");
         for table in CHAT_TABLES {
@@ -1838,12 +1847,13 @@ pub(crate) mod tests {
     }
 
     /// Every table keyed by chat besides `chats` itself.
-    const CHAT_TABLES: [&str; 5] = [
+    const CHAT_TABLES: [&str; 6] = [
         "messages",
         "group_receipts",
         "polls",
         "poll_history",
         "poll_votes",
+        "drafts",
     ];
 
     fn rows(archive: &Archive, table: &str, chat: &str) -> i64 {

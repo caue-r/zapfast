@@ -131,7 +131,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   You can swap these keys in Settings. The composer is focused when you open
   or return to a conversation; invoking search keeps focus in search, and
   Escape clears search and returns to the composer; another Escape closes the
-  chat and saves your text draft. Open menus, dialogs, and unfinished actions
+  chat and saves your text draft. Drafts are kept in the encrypted archive, so
+  unsent text survives closing ZapFast and restarting. Open menus, dialogs, and unfinished actions
   are dismissed first. Type `:name` to autocomplete
   an emoji without leaving the composer, or `@` in a group to mention a member.
   Reply, react with any emoji, edit, forward, delete, and check when a message was sent,

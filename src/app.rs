@@ -591,6 +591,7 @@ impl App {
 
     /// Updates the linked app while no window exists.
     pub fn window_gone(&mut self) {
+        self.flush_open_draft();
         self.clear_chat_lock_entry();
         if self.dialog == Some(Dialog::UnlockLockedChats) {
             self.dialog = None;
@@ -1280,6 +1281,21 @@ impl App {
                     self.me_name = name;
                     self.me_about = about;
                 }
+                Event::Drafts(drafts) => {
+                    // Unsent text stored by an earlier session. Text typed in
+                    // this session wins over the stored copy.
+                    for (chat, text) in drafts {
+                        // The chat reopened at startup shows its draft at once.
+                        if self.open_chat.as_deref() == Some(chat.as_str())
+                            && self.editing.is_none()
+                            && self.composer.is_empty()
+                        {
+                            self.composer = text;
+                        } else {
+                            self.drafts.entry(chat).or_insert(text);
+                        }
+                    }
+                }
                 Event::Chats(chats) => {
                     for chat in &chats {
                         if chat.unread == 0 {
@@ -1668,6 +1684,11 @@ impl App {
                 self.contacts.clear();
                 self.avatars.clear();
                 self.open_chat = None;
+                // Unsent text belongs to the account that was unlinked.
+                self.drafts.clear();
+                self.draft_mentions.clear();
+                self.composer.clear();
+                self.composer_mentions.clear();
                 self.toast_error("This device was unlinked from your phone");
             }
             LinkStatus::Failed(message) => self.toast_error(message.clone()),
@@ -1742,6 +1763,9 @@ impl App {
     /// pending edit would send `EditText` for a message that no longer exists.
     fn handle_chat_cleared(&mut self, id: &str, through: i64) {
         self.notifications.clear(id);
+        // Clearing a chat also removes its stored draft.
+        self.drafts.remove(id);
+        self.draft_mentions.remove(id);
         self.search_hits
             .retain(|message| message.chat != id || message.timestamp > through);
         // Nothing earlier is left here, and the phone no longer has it either.
@@ -1825,6 +1849,13 @@ impl App {
 
     fn hide_locked_chat(&mut self, id: &str) {
         // A locked chat still exists, so its unsent text waits as a draft.
+        // Text emptied in the composer clears the stored copy too.
+        if self.open_chat.as_deref() == Some(id)
+            && self.editing.is_none()
+            && self.composer.is_empty()
+        {
+            self.store_draft(id, "");
+        }
         if self.open_chat.as_deref() == Some(id)
             && self.editing.is_none()
             && !self.composer.is_empty()
@@ -1833,8 +1864,21 @@ impl App {
                 .insert(id.to_owned(), std::mem::take(&mut self.composer));
             self.draft_mentions
                 .insert(id.to_owned(), std::mem::take(&mut self.composer_mentions));
+            self.store_draft(
+                id,
+                self.drafts.get(id).map(String::as_str).unwrap_or_default(),
+            );
         }
         self.leave_chat(id);
+    }
+
+    /// Mirrors a chat's draft into the encrypted archive, so unsent text
+    /// survives a restart. An empty text clears the stored row.
+    fn store_draft(&self, chat: &str, text: &str) {
+        self.backend.send(Command::SaveDraft {
+            chat: chat.to_owned(),
+            text: text.to_owned(),
+        });
     }
 
     fn handle_media(
@@ -1976,6 +2020,8 @@ impl App {
                     );
                 }
                 self.stop_composing(&previous);
+                let draft = self.drafts.get(&previous).cloned().unwrap_or_default();
+                self.store_draft(&previous, &draft);
             }
             self.selection = None;
             self.unread_divider =
@@ -2105,6 +2151,8 @@ impl App {
             });
             return;
         }
+        // The text is on its way, so there is nothing left to restore.
+        self.store_draft(&chat, "");
         self.backend.send(Command::SendText {
             chat,
             text,
@@ -3894,7 +3942,18 @@ impl App {
 
     pub fn shutdown(&mut self) {
         self.save_state();
+        self.flush_open_draft();
         self.backend.shutdown();
+    }
+
+    /// Stores the open chat's unsent text, which otherwise only moves into
+    /// the archive when another chat opens.
+    fn flush_open_draft(&self) {
+        if let Some(chat) = self.open_chat.as_deref()
+            && self.editing.is_none()
+        {
+            self.store_draft(chat, &self.composer);
+        }
     }
 
     /// Returns attachment state for a loaded message.
@@ -4501,6 +4560,42 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn drafts_come_back_after_a_restart_and_leave_with_the_account() {
+        let mut app = app();
+        let (backend, mut commands, events) = Backend::recording_with_events();
+        app.backend = backend;
+        let (open, other) = ("1@s.whatsapp.net", "2@s.whatsapp.net");
+        app.open_chat = Some(open.into());
+        events
+            .send(Event::Drafts(vec![
+                (open.into(), "half a reply".into()),
+                (other.into(), "later".into()),
+            ]))
+            .unwrap();
+        app.handle_events();
+        assert_eq!(app.composer, "half a reply", "the reopened chat shows it");
+        assert_eq!(app.drafts.get(other).map(String::as_str), Some("later"));
+        // Quitting stores what is in the composer.
+        app.composer = "half a reply, finished".into();
+        app.shutdown();
+        let saved: Vec<(String, String)> = std::iter::from_fn(|| commands.try_recv().ok())
+            .filter_map(|command| match command {
+                Command::SaveDraft { chat, text } => Some((chat, text)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            saved,
+            [(open.to_owned(), "half a reply, finished".to_owned())]
+        );
+        // Unlinking forgets every draft.
+        events.send(Event::Link(LinkStatus::LoggedOut)).unwrap();
+        app.handle_events();
+        assert!(app.drafts.is_empty());
+        assert!(app.composer.is_empty());
     }
 
     #[test]
