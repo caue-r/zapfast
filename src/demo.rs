@@ -4872,6 +4872,8 @@ mod tests {
                 Stop::Unread,
                 Stop::Private,
                 Stop::Groups,
+                Stop::Channels,
+                Stop::Archived,
                 Stop::Locked,
             ]
             .into_iter()

@@ -39,10 +39,19 @@ pub enum ChatFilter {
     /// One-to-one chats: neither groups nor broadcasts.
     Private,
     Groups,
+    /// Followed channels (newsletters), kept out of the other filters as in
+    /// the official apps.
+    Channels,
 }
 
 impl ChatFilter {
-    pub const EVERY: [Self; 4] = [Self::All, Self::Unread, Self::Private, Self::Groups];
+    pub const EVERY: [Self; 5] = [
+        Self::All,
+        Self::Unread,
+        Self::Private,
+        Self::Groups,
+        Self::Channels,
+    ];
 
     pub fn label(self, locale: crate::i18n::Locale) -> std::borrow::Cow<'static, str> {
         use crate::i18n::gettext;
@@ -51,15 +60,17 @@ impl ChatFilter {
             Self::Unread => gettext(locale, "Unread"),
             Self::Private => gettext(locale, "Private"),
             Self::Groups => gettext(locale, "Groups"),
+            Self::Channels => gettext(locale, "Channels"),
         }
     }
 
     pub fn matches(self, chat: &Chat) -> bool {
         match self {
-            Self::All => true,
-            Self::Unread => chat.unread > 0,
+            Self::All => !chat.is_channel(),
+            Self::Unread => chat.unread > 0 && !chat.is_channel(),
             Self::Private => chat.kind == ChatKind::Direct,
             Self::Groups => chat.kind == ChatKind::Group,
+            Self::Channels => chat.is_channel(),
         }
     }
 }
@@ -128,6 +139,11 @@ impl Chat {
     /// Newsletter publishing permissions are not supported by this client.
     pub fn can_send(&self) -> bool {
         !self.locked && !self.read_only && self.kind != ChatKind::Broadcast
+    }
+
+    /// A followed WhatsApp channel (newsletter).
+    pub fn is_channel(&self) -> bool {
+        self.id.ends_with("@newsletter")
     }
 
     pub fn is_group(&self) -> bool {
@@ -869,6 +885,8 @@ pub enum Action {
     CloseDialog,
     ToggleSidebar,
     SetChatFilter(ChatFilter),
+    /// Shows or leaves the archived chats.
+    ShowArchived(bool),
     /// A chat opened from the main list, kept there under the Unread filter.
     KeepUnread(ChatId),
     FocusSearch,

@@ -1089,6 +1089,14 @@ impl App {
         contacts
     }
 
+    /// Archived chats with unread messages, for the Archived chip.
+    pub fn archived_unread(&self) -> usize {
+        self.chats
+            .iter()
+            .filter(|chat| chat.archived && !chat.locked && chat.unread > 0)
+            .count()
+    }
+
     pub fn archived_count(&self) -> usize {
         self.chats
             .iter()
@@ -2833,6 +2841,16 @@ impl App {
                     self.search_hits.clear();
                 }
                 self.chat_filter = filter;
+                self.show_archived = false;
+                self.unread_kept.clear();
+            }
+            Action::ShowArchived(show) => {
+                if self.locked_folder {
+                    self.close_locked_folder();
+                    self.search.clear();
+                    self.search_hits.clear();
+                }
+                self.show_archived = show;
                 self.unread_kept.clear();
             }
             // Reading a chat must not pull its row out from under the pointer.
@@ -4596,6 +4614,37 @@ mod tests {
     }
 
     #[test]
+    fn channels_have_their_own_chip_and_archived_chats_theirs() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let mut friend = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
+        friend.unread = 1;
+        let mut channel = Chat::new("2@newsletter".into(), "News".into());
+        channel.unread = 3;
+        let mut archived = Chat::new("3@s.whatsapp.net".into(), "Old".into());
+        archived.archived = true;
+        archived.unread = 2;
+        app.chats = vec![friend, channel, archived];
+        let names = |app: &App| {
+            app.visible_chats()
+                .iter()
+                .map(|chat| chat.name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&app), ["Ada"], "All leaves channels out");
+        assert_eq!(app.unread_chats(ChatFilter::Unread), 1);
+        assert_eq!(app.unread_chats(ChatFilter::Channels), 1);
+        app.apply(Action::SetChatFilter(ChatFilter::Channels), &ctx);
+        assert_eq!(names(&app), ["News"]);
+        app.apply(Action::ShowArchived(true), &ctx);
+        assert_eq!(names(&app), ["Old"]);
+        assert_eq!(app.archived_unread(), 1);
+        app.apply(Action::SetChatFilter(ChatFilter::All), &ctx);
+        assert!(!app.show_archived, "choosing a filter leaves the archive");
+        assert_eq!(names(&app), ["Ada"]);
+    }
+
+    #[test]
     fn visible_chats_pin_first_and_filter() {
         let mut app = app();
         let mut a = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
@@ -4646,7 +4695,13 @@ mod tests {
                 .map(|chat| chat.name.clone())
                 .collect()
         };
-        assert_eq!(names(&app), ["Ada", "Bob", "Club", "News"]);
+        assert_eq!(
+            names(&app),
+            ["Ada", "Bob", "Club"],
+            "channels have their own chip"
+        );
+        app.chat_filter = ChatFilter::Channels;
+        assert_eq!(names(&app), ["News"]);
         app.chat_filter = ChatFilter::Unread;
         assert_eq!(names(&app), ["Ada", "Club"]);
         app.chat_filter = ChatFilter::Private;

@@ -27,6 +27,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   and message status. Search chats, saved messages, and contacts.
   Filter the list to unread, private (one-to-one), or group chats with the
   chips under the search bar; a chip with unread chats shows how many it has.
+  Followed channels have their own **Channels** chip and stay out of the other
+  filters, and **Archived** opens the archived chats.
   Pinned chats stay in pin order (most recently pinned first), regardless of
   new messages. Like on the phone, you can pin up to three chats. Chat and contact name searches ignore accents, so `Angel`
   finds `Ángel`.

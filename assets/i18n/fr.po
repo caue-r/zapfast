@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 10:38+0200\n"
+"POT-Creation-Date: 2026-09-23 11:25+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: French\n"
@@ -16,21 +16,25 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: src/model.rs:50
+#: src/model.rs:59
 msgid "All"
 msgstr "Tous"
 
-#: src/model.rs:51
+#: src/model.rs:60
 msgid "Unread"
 msgstr "Non lus"
 
-#: src/model.rs:52
+#: src/model.rs:61
 msgid "Private"
 msgstr "Privés"
 
-#: src/model.rs:53
+#: src/model.rs:62
 msgid "Groups"
 msgstr "Groupes"
+
+#: src/model.rs:63
+msgid "Channels"
+msgstr "Chaînes"
 
 #: src/util.rs:67 src/util.rs:117
 msgid "Yesterday"
@@ -139,7 +143,11 @@ msgstr "Discussions"
 msgid "Search"
 msgstr "Rechercher"
 
-#: src/ui/chats.rs:340
+#: src/ui/chats.rs:343
+msgid "Archived"
+msgstr "Archivées"
+
+#: src/ui/chats.rs:360
 msgid "Locked"
 msgstr "Verrouillés"
 

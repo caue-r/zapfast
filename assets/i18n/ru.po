@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 10:38+0200\n"
+"POT-Creation-Date: 2026-09-23 11:25+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Russian\n"
@@ -17,21 +17,25 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: src/model.rs:50
+#: src/model.rs:59
 msgid "All"
 msgstr "Все"
 
-#: src/model.rs:51
+#: src/model.rs:60
 msgid "Unread"
 msgstr "Непрочитанные"
 
-#: src/model.rs:52
+#: src/model.rs:61
 msgid "Private"
 msgstr "Личные"
 
-#: src/model.rs:53
+#: src/model.rs:62
 msgid "Groups"
 msgstr "Группы"
+
+#: src/model.rs:63
+msgid "Channels"
+msgstr "Каналы"
 
 #: src/util.rs:67 src/util.rs:117
 msgid "Yesterday"
@@ -140,7 +144,11 @@ msgstr "Чаты"
 msgid "Search"
 msgstr "Поиск"
 
-#: src/ui/chats.rs:340
+#: src/ui/chats.rs:343
+msgid "Archived"
+msgstr "Архив"
+
+#: src/ui/chats.rs:360
 msgid "Locked"
 msgstr "Заблокированные"
 
