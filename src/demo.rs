@@ -1601,6 +1601,14 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             }
             "message-info" => message_info_sample(app, true),
             "message-info-unknown" => message_info_sample(app, false),
+            "message-info-partial" => {
+                message_info_sample(app, true);
+                // One reader, from receipts kept before the audience was.
+                if let Some(receipts) = &mut app.message_receipts {
+                    receipts.recipients.truncate(1);
+                    receipts.recipients[0].expected = false;
+                }
+            }
             "message-info-direct" => {
                 let chat = SAMPLES[0].id;
                 let c = app.conversations.get_mut(chat).unwrap();
@@ -2949,6 +2957,38 @@ mod tests {
         }
     }
 
+    /// Message info grows with its content like poll results, so a short
+    /// list, the note about missing receipts included, shows without
+    /// scrolling.
+    #[test]
+    fn short_message_info_shows_in_full() {
+        for page in [
+            "message-info-partial",
+            "message-info-unknown",
+            "message-info-direct",
+        ] {
+            let mut app = app();
+            apply_flags(&mut app, Some(page));
+            let ctx = egui::Context::default();
+            app.attach(&ctx);
+            render(&mut app, &ctx);
+            let Some(Dialog::MessageInfo { chat, message }) = app.dialog.clone() else {
+                panic!("{page}: no message info");
+            };
+            let id = crate::ui::conversation::bubble_id(&chat, &message);
+            let viewport = ctx
+                .data(|data| data.get_temp::<egui::Rect>(id.with("message-info-viewport")))
+                .unwrap();
+            let content = ctx
+                .data(|data| data.get_temp::<egui::Vec2>(id.with("message-info-content")))
+                .unwrap();
+            assert!(
+                content.y <= viewport.height() + 0.5,
+                "{page}: content {content:?}, viewport {viewport:?}"
+            );
+        }
+    }
+
     #[test]
     fn list_dialog_dismissal_and_connection_changes_do_not_send_replies() {
         for state in ["escape", "disconnected", "pending", "edited", "removed"] {
@@ -3548,6 +3588,7 @@ mod tests {
             "poll-results",
             "message-info",
             "message-info-unknown",
+            "message-info-partial",
             "message-info-direct",
             "video",
             "video-playing",

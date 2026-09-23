@@ -286,6 +286,20 @@ pub fn unread_indicator(
     }
 }
 
+/// The height of a dialog's scrolling body: it grows with the content until
+/// the whole dialog takes the window's height less a margin, up to a cap, and
+/// then scrolls. Poll results set the measure; give the scroll area this as
+/// both its maximum and its minimum scrolled height, so a modal does not
+/// shrink it to the space below its first, smaller position.
+pub fn dialog_scroll_height(ui: &Ui) -> f32 {
+    // What the dialog has laid out above the scroll area: its title, and
+    // anything else that stays in place.
+    let above = (ui.cursor().top() - ui.min_rect().top()).max(0.0);
+    (ui.ctx().content_rect().height() - 158.0 - above)
+        .min(592.0 - above)
+        .max(100.0)
+}
+
 /// Minimum width needed for menu labels.
 pub fn menu_width(ui: &Ui, labels: &[&str], icons: bool) -> f32 {
     let widest = labels
