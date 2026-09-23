@@ -1396,8 +1396,11 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             // releases stick-to-bottom; setting the offset directly does not.
             let viewport = ui.clip_rect();
             *app.selection_view.lock().unwrap_or_else(|p| p.into_inner()) = Some(viewport);
+            // Only a drag that has moved past a click, such as selecting
+            // text, scrolls; a click near an edge does not.
             let held_inside = ui.input(|input| {
                 input.pointer.primary_down()
+                    && input.pointer.is_decidedly_dragging()
                     && input.pointer.press_origin().is_some_and(|origin| {
                         viewport.contains(origin) && origin.x < viewport.right() - 16.0
                     })

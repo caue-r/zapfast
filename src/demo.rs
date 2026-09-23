@@ -3123,16 +3123,21 @@ mod tests {
             command: !cfg!(target_os = "macos"),
             ..Default::default()
         };
+        let fitted = app.image_preview.as_ref().unwrap().scale();
         frame_with(&mut app, &ctx, vec![key(egui::Key::Equals, ctrl_shift)]);
         render(&mut app, &ctx);
-        assert_eq!(app.image_preview.as_ref().unwrap().zoom(), 1.25);
+        let first = app.image_preview.as_ref().unwrap().zoom();
+        assert!(
+            (first - fitted * 1.25).abs() < 1e-4,
+            "zooms from the fitted size"
+        );
         frame_with(
             &mut app,
             &ctx,
             vec![key(egui::Key::Plus, egui::Modifiers::COMMAND)],
         );
         render(&mut app, &ctx);
-        assert_eq!(app.image_preview.as_ref().unwrap().zoom(), 1.5625);
+        assert!((app.image_preview.as_ref().unwrap().zoom() - first * 1.25).abs() < 1e-4);
         frame_with(
             &mut app,
             &ctx,
@@ -4536,14 +4541,16 @@ mod tests {
             .lock()
             .expect("the view rect")
             .expect("the conversation was drawn");
+        // Press lower down, then drag into the top edge, as when selecting.
+        let start = egui::pos2(view.center().x, view.top() + 80.0);
         let hold = egui::pos2(view.center().x, view.top() + 10.0);
         let press = egui::Event::PointerButton {
-            pos: hold,
+            pos: start,
             button: egui::PointerButton::Primary,
             pressed: true,
             modifiers: egui::Modifiers::NONE,
         };
-        let mut frames: Vec<Vec<egui::Event>> = vec![vec![egui::Event::PointerMoved(hold), press]];
+        let mut frames: Vec<Vec<egui::Event>> = vec![vec![egui::Event::PointerMoved(start), press]];
         frames.extend((0..12).map(|_| vec![egui::Event::PointerMoved(hold)]));
         for events in frames {
             let input = egui::RawInput {
@@ -4567,6 +4574,68 @@ mod tests {
             "the list should have scrolled up; best {moved}"
         );
         assert!(!app.scroll_to_bottom, "heading up releases the pin");
+    }
+
+    /// A click held still near the top edge does not scroll.
+    #[test]
+    fn a_click_held_at_the_top_edge_does_not_scroll() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        render(&mut app, &ctx);
+        let chat = sample_ids()[0].to_owned();
+        let ids: Vec<String> = app.conversations[&chat]
+            .messages
+            .iter()
+            .map(|message| message.id.clone())
+            .collect();
+        let rect_of = |ctx: &egui::Context, id: &str| {
+            let key = crate::ui::conversation::bubble_id(&chat, id).with("rect");
+            ctx.data(|data| data.get_temp::<egui::Rect>(key))
+        };
+        let before: Vec<(String, f32)> = ids
+            .iter()
+            .filter_map(|id| rect_of(&ctx, id).map(|rect| (id.clone(), rect.top())))
+            .collect();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1180.0, 780.0));
+        // Use the frame's stored message-view rect because platform insets vary.
+        let view = app
+            .selection_view
+            .lock()
+            .expect("the view rect")
+            .expect("the conversation was drawn");
+        let start = egui::pos2(view.center().x, view.top() + 10.0);
+        let hold = egui::pos2(view.center().x, view.top() + 10.0);
+        let press = egui::Event::PointerButton {
+            pos: start,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut frames: Vec<Vec<egui::Event>> = vec![vec![egui::Event::PointerMoved(start), press]];
+        frames.extend((0..12).map(|_| vec![egui::Event::PointerMoved(hold)]));
+        for events in frames {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                let ctx = ui.ctx().clone();
+                app.background_frame(&ctx);
+                app.frame_ui(ui);
+            });
+            output.textures_delta.clear();
+        }
+        let moved = before
+            .iter()
+            .filter_map(|(id, top)| rect_of(&ctx, id).map(|rect| rect.top() - top))
+            .fold(f32::MIN, f32::max);
+        assert!(
+            moved.abs() < 1.0,
+            "a still click should not scroll; moved {moved}"
+        );
     }
 
     /// Selection scrolls only near a view edge.
