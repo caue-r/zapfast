@@ -23,7 +23,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         key(
             Modifiers::COMMAND | Modifiers::SHIFT,
             Key::F,
-            Action::OpenChatSearch,
+            Action::FocusSearch,
         );
         key(Modifiers::COMMAND, Key::F, find);
         key(Modifiers::COMMAND, Key::K, Action::FocusSearch);
@@ -252,7 +252,7 @@ fn find_action(app: &App) -> Action {
 
 /// Shortcuts shown in the help dialog.
 pub const SHORTCUTS: &[(&str, &str)] = &[
-    ("Ctrl+K", "Search chats"),
+    ("Ctrl+K / Ctrl+Shift+F", "Search chats"),
     ("Ctrl+F", "Search the open chat (Enter for the next match)"),
     ("Ctrl+L", "Focus the message input"),
     ("Alt+↑ / Alt+↓", "Previous / next chat"),
