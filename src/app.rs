@@ -375,6 +375,14 @@ impl App {
             let waker = waker.clone();
             app.tray = TrayService::spawn(move || waker.wake());
         }
+        // The clock preference may run a helper on Linux; keep it off the
+        // first frame.
+        std::thread::Builder::new()
+            .name("clock-format".into())
+            .spawn(|| {
+                crate::util::twelve_hour_clock();
+            })
+            .ok();
         if crate::autostart::supported() {
             app.start_with_system = Some(crate::autostart::enabled());
         }

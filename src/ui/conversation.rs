@@ -2003,7 +2003,11 @@ fn bubble_frame(
         &[
             "Delete for everyone",
             "Show in folder",
-            "Delivered Yesterday at 20:45",
+            if crate::util::twelve_hour_clock() {
+                "Delivered Yesterday at 11:59 PM"
+            } else {
+                "Delivered Yesterday at 20:45"
+            },
         ],
         true,
     )
