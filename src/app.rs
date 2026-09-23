@@ -215,6 +215,8 @@ pub struct App {
     pub invite: Option<crate::model::GroupInvite>,
     /// Where the unread messages began when the open chat was opened.
     pub unread_divider: Option<UnreadDivider>,
+    /// Messages selected in a chat, in the chat's order.
+    pub selection: Option<(ChatId, Vec<String>)>,
     avatars: HashMap<String, Option<PathBuf>>,
     avatar_requests: HashSet<String>,
     /// Full-size profile pictures for info dialogs.
@@ -475,6 +477,7 @@ impl App {
             account_receipts_off: false,
             invite: None,
             unread_divider: None,
+            selection: None,
             avatars: HashMap::new(),
             avatar_requests: HashSet::new(),
             avatars_full: HashMap::new(),
@@ -1884,6 +1887,7 @@ impl App {
                 }
                 self.stop_composing(&previous);
             }
+            self.selection = None;
             self.unread_divider =
                 self.chat(&id)
                     .filter(|chat| chat.unread > 0)
@@ -2536,17 +2540,49 @@ impl App {
             Action::CancelReply => self.reply_to = None,
             Action::Forward {
                 from_chat,
-                message,
+                messages,
                 to_chat,
             } => {
-                self.backend.send(Command::Forward {
-                    from_chat,
-                    message,
-                    to_chat,
-                });
+                for message in messages {
+                    self.backend.send(Command::Forward {
+                        from_chat: from_chat.clone(),
+                        message,
+                        to_chat: to_chat.clone(),
+                    });
+                }
                 self.dialog = None;
                 self.forward_search.clear();
+                self.selection = None;
             }
+            Action::SelectMessage(id) => {
+                if let Some(chat) = self.open_chat.clone() {
+                    self.selection = Some((chat, vec![id]));
+                }
+            }
+            Action::ToggleSelected(id) => {
+                if let Some((chat, ids)) = self.selection.as_mut() {
+                    if let Some(index) = ids.iter().position(|selected| *selected == id) {
+                        ids.remove(index);
+                    } else {
+                        ids.push(id);
+                        // Keep the chat's order, so forwards arrive as they were sent.
+                        if let Some(conversation) = self.conversations.get(chat.as_str()) {
+                            let position = |id: &String| {
+                                conversation
+                                    .messages
+                                    .iter()
+                                    .position(|message| message.id == *id)
+                                    .unwrap_or(usize::MAX)
+                            };
+                            ids.sort_by_key(position);
+                        }
+                    }
+                    if ids.is_empty() {
+                        self.selection = None;
+                    }
+                }
+            }
+            Action::CancelSelection => self.selection = None,
             Action::Edit(id) => {
                 let text = self
                     .open_chat
@@ -4220,6 +4256,51 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn selected_messages_forward_together_in_chat_order() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let ctx = egui::Context::default();
+        let chat = "1@s.whatsapp.net";
+        app.chats = vec![Chat::new(chat.into(), "Ada".into())];
+        app.open_chat = Some(chat.into());
+        app.conversations.entry(chat.into()).or_default().merge(
+            vec![
+                message(chat, "first", 1),
+                message(chat, "second", 2),
+                message(chat, "third", 3),
+            ],
+            false,
+        );
+        app.apply(Action::SelectMessage("third".into()), &ctx);
+        app.apply(Action::ToggleSelected("first".into()), &ctx);
+        assert_eq!(
+            app.selection,
+            Some((chat.into(), vec!["first".into(), "third".into()]))
+        );
+        app.apply(
+            Action::Forward {
+                from_chat: chat.into(),
+                messages: vec!["first".into(), "third".into()],
+                to_chat: "2@s.whatsapp.net".into(),
+            },
+            &ctx,
+        );
+        let forwarded: Vec<String> = std::iter::from_fn(|| commands.try_recv().ok())
+            .filter_map(|command| match command {
+                Command::Forward { message, .. } => Some(message),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(forwarded, ["first", "third"]);
+        assert!(app.selection.is_none());
+        // Unselecting the last message leaves selection mode.
+        app.apply(Action::SelectMessage("second".into()), &ctx);
+        app.apply(Action::ToggleSelected("second".into()), &ctx);
+        assert!(app.selection.is_none());
     }
 
     #[test]

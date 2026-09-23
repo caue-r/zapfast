@@ -686,7 +686,8 @@ pub enum Dialog {
     /// Chooses a destination for an archived message.
     Forward {
         chat: ChatId,
-        message: String,
+        /// Message ids, in the order they appear in the chat.
+        messages: Vec<String>,
     },
     CreatePoll(ChatId),
     PollResults {
@@ -834,9 +835,15 @@ pub enum Action {
     /// Forwards an archived message to another chat.
     Forward {
         from_chat: ChatId,
-        message: String,
+        messages: Vec<String>,
         to_chat: ChatId,
     },
+    /// Starts selecting messages in the open chat, beginning with this one.
+    SelectMessage(String),
+    /// Adds a message to the selection or removes it.
+    ToggleSelected(String),
+    /// Leaves selection mode.
+    CancelSelection,
     /// Loads an outgoing message into the composer for editing.
     Edit(String),
     CancelEdit,
