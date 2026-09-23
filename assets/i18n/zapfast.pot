@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:05+0200\n"
+"POT-Creation-Date: 2026-09-23 16:08+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -233,4 +233,12 @@ msgstr ""
 
 #: src/ui/settings.rs:365
 msgid "About"
+msgstr ""
+
+#: src/ui/settings.rs:458
+msgid "Add doodles"
+msgstr ""
+
+#: src/ui/settings.rs:462
+msgid "Show the default doodles over the selected colour."
 msgstr ""

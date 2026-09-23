@@ -539,7 +539,7 @@ platforms, use `zapfast reload-themes` after editing. The command also works whi
 the window is closed and never launches a stopped app.
 
 **Settings → Appearance → Wallpaper** offers WhatsApp's light and dark wallpaper
-colours, with a live preview of the selected colour and doodles. **Add WhatsApp
+colours, with a live preview of the selected colour and doodles. **Add
 doodles** controls only the SVG layer, so disabling it leaves the selected
 background colour in place. Light and dark selections are stored independently,
 and the embedded SVG is rendered at its native size and repeated across the
@@ -674,4 +674,4 @@ Release packaging uses the [native-packages](https://rubygems.org/gems/native-pa
 ## License
 
 MIT. Inter and Noto Color Emoji are under the SIL Open Font License; the icons
-are from [Lucide](https://lucide.dev) (ISC).
+and the chat wallpaper doodles are from [Lucide](https://lucide.dev) (ISC).

@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 16:05+0200\n"
+"POT-Creation-Date: 2026-09-23 16:08+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: French\n"
@@ -220,7 +220,7 @@ msgstr "Fenêtre"
 
 #: src/ui/settings.rs:262
 msgid "Network"
-msgstr ""
+msgstr "Réseau"
 
 #: src/ui/settings.rs:293
 msgid "Account"
@@ -233,3 +233,11 @@ msgstr "Fichiers"
 #: src/ui/settings.rs:365
 msgid "About"
 msgstr "À propos"
+
+#: src/ui/settings.rs:458
+msgid "Add doodles"
+msgstr "Ajouter des dessins"
+
+#: src/ui/settings.rs:462
+msgid "Show the default doodles over the selected colour."
+msgstr "Afficher les dessins par défaut sur la couleur sélectionnée."

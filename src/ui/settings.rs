@@ -453,11 +453,14 @@ pub fn wallpaper_show(app: &mut App, ui: &mut egui::Ui) {
                                         Layout::top_down(Align::Center),
                                         |ui| {
                                             let mut doodles = app.settings.show_wallpaper;
-                                            let checkbox =
-                                                ui.checkbox(&mut doodles, "Add WhatsApp doodles");
-                                            checkbox.on_hover_text(
-                                                "Show the default WhatsApp doodles over the selected colour.",
+                                            let checkbox = ui.checkbox(
+                                                &mut doodles,
+                                                crate::i18n::gettext(app.locale, "Add doodles"),
                                             );
+                                            checkbox.on_hover_text(crate::i18n::gettext(
+                                                app.locale,
+                                                "Show the default doodles over the selected colour.",
+                                            ));
                                             if doodles != app.settings.show_wallpaper {
                                                 app.actions.push(Action::SetWallpaperDoodles(doodles));
                                             }
