@@ -283,6 +283,8 @@ pub struct App {
     pub window_focused: bool,
     /// Presence last reported to the backend.
     reported_online: Option<bool>,
+    /// Whether ZapFast starts at login, when this installation supports it.
+    pub start_with_system: Option<bool>,
     /// Cross-thread window repaint handle.
     waker: Waker,
     tray: Option<TrayService>,
@@ -348,6 +350,9 @@ impl App {
         if options.tray {
             let waker = waker.clone();
             app.tray = TrayService::spawn(move || waker.wake());
+        }
+        if crate::autostart::supported() {
+            app.start_with_system = Some(crate::autostart::enabled());
         }
         app
     }
@@ -491,6 +496,7 @@ impl App {
             quit_requested: false,
             window_focused: false,
             reported_online: None,
+            start_with_system: None,
             waker,
             tray: None,
             window_hidden: false,
@@ -556,6 +562,7 @@ impl App {
             match command {
                 ControlCommand::Show => self.actions.push(Action::ShowWindow),
                 ControlCommand::ReloadThemes => self.actions.push(Action::ReloadThemes),
+                ControlCommand::Ping => {}
             }
         }
     }
@@ -2981,6 +2988,10 @@ impl App {
                 self.mark_settings_dirty();
             }
             Action::SettingsChanged => self.mark_settings_dirty(),
+            Action::SetStartWithSystem(enabled) => match crate::autostart::set(enabled) {
+                Ok(()) => self.start_with_system = Some(crate::autostart::enabled()),
+                Err(error) => self.toast_error(format!("Could not change the login item: {error}")),
+            },
             Action::ZoomBy(delta) => {
                 self.settings.zoom = (self.settings.zoom + delta).clamp(0.6, 2.0);
                 self.zoom_applied = false;

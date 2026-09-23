@@ -19,6 +19,10 @@ struct Cli {
     /// Log more from the WhatsApp library.
     #[arg(short, long)]
     verbose: bool,
+    /// Start in the tray without opening a window, when the tray is available
+    /// and ZapFast keeps running in the background. For login autostart.
+    #[arg(long)]
+    start_hidden: bool,
 
     /// Start with offline sample chats.
     #[cfg(feature = "demo")]
@@ -93,8 +97,14 @@ fn main() -> eframe::Result<()> {
     let instance = if demo {
         None
     } else {
-        match single_instance::acquire(&waker) {
+        // A hidden start must not surface a copy that is already running.
+        let verb = if cli.start_hidden { "ping" } else { "show" };
+        match single_instance::acquire(&waker, verb) {
             single_instance::Outcome::Only(guard) => Some(guard),
+            single_instance::Outcome::Surfaced if cli.start_hidden => {
+                eprintln!("ZapFast is already running");
+                return Ok(());
+            }
             single_instance::Outcome::Surfaced => {
                 eprintln!("ZapFast or FastsApp is already running; asked it to show its window");
                 return Ok(());
@@ -193,49 +203,66 @@ fn main() -> eframe::Result<()> {
     let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(app)));
 
     let mut update_receipt = cli.update_receipt;
+    // Without a tray there is no way back to a hidden window, so show it.
+    let mut start_hidden = cli.start_hidden
+        && !demo
+        && update_receipt.is_none()
+        && slot
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .is_some_and(app::App::hides_to_tray);
 
     // The link, archive, and tray outlive windows. Recreate a window when the
     // tray, notification, or another launch requests one.
     loop {
-        let creator_slot = std::sync::Arc::clone(&slot);
-        let creator_waker = waker.clone();
-        let creator_receipt = update_receipt.take();
-        #[cfg(feature = "demo")]
-        let creator_shot = shot.clone();
-        #[cfg(feature = "demo")]
-        let creator_tour_events = cli.demo_tour_events.clone();
-        eframe::run_native(
-            "ZapFast",
-            native_options(demo_persistence.clone()),
-            Box::new(move |cc| {
-                creator_waker.attach(&cc.egui_ctx);
-                let mut app = creator_slot
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .take()
-                    .expect("application state present");
-                app.attach(&cc.egui_ctx);
-                #[cfg(feature = "demo")]
-                if cli.demo_macos {
-                    zapfast::theme::preview_macos(&cc.egui_ctx);
-                }
-                Ok(Box::new(Shell {
-                    app: Some(app),
-                    update_receipt: creator_receipt,
-                    slot: std::sync::Arc::clone(&creator_slot),
+        if std::mem::take(&mut start_hidden) {
+            slot.lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .as_mut()
+                .expect("application state present")
+                .hide_intent = true;
+        } else {
+            let creator_slot = std::sync::Arc::clone(&slot);
+            let creator_waker = waker.clone();
+            let creator_receipt = update_receipt.take();
+            #[cfg(feature = "demo")]
+            let creator_shot = shot.clone();
+            #[cfg(feature = "demo")]
+            let creator_tour_events = cli.demo_tour_events.clone();
+            eframe::run_native(
+                "ZapFast",
+                native_options(demo_persistence.clone()),
+                Box::new(move |cc| {
+                    creator_waker.attach(&cc.egui_ctx);
+                    let mut app = creator_slot
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .take()
+                        .expect("application state present");
+                    app.attach(&cc.egui_ctx);
                     #[cfg(feature = "demo")]
-                    shot: creator_shot,
-                    #[cfg(feature = "demo")]
-                    tour: cli.demo_tour.then(|| {
-                        zapfast::demo::tour::Tour::new(
-                            cli.demo_tour_delay.map(std::time::Duration::from_millis),
-                            creator_tour_events,
-                        )
-                    }),
-                }))
-            }),
-        )?;
-        waker.detach();
+                    if cli.demo_macos {
+                        zapfast::theme::preview_macos(&cc.egui_ctx);
+                    }
+                    Ok(Box::new(Shell {
+                        app: Some(app),
+                        update_receipt: creator_receipt,
+                        slot: std::sync::Arc::clone(&creator_slot),
+                        #[cfg(feature = "demo")]
+                        shot: creator_shot,
+                        #[cfg(feature = "demo")]
+                        tour: cli.demo_tour.then(|| {
+                            zapfast::demo::tour::Tour::new(
+                                cli.demo_tour_delay.map(std::time::Duration::from_millis),
+                                creator_tour_events,
+                            )
+                        }),
+                    }))
+                }),
+            )?;
+            waker.detach();
+        }
 
         let hide = {
             let guard = slot.lock().unwrap_or_else(|p| p.into_inner());

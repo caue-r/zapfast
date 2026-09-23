@@ -4,6 +4,7 @@ pub mod animation;
 pub mod app;
 pub mod archive;
 pub mod audio;
+pub mod autostart;
 pub mod backend;
 pub mod bidi;
 #[cfg(any(test, feature = "demo"))]

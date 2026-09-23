@@ -191,6 +191,13 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **Runs in the background.** Closing the window keeps ZapFast linked in the
   system tray. Reopen it from the tray or by launching it again. Quit from the
   tray or with `Ctrl+Q`, or disable this behavior in Settings.
+- **Start at login.** Turn on **Start at login** in Settings to start ZapFast in
+  the tray when you log in, without opening a window. It adds
+  `~/.config/autostart/zapfast.desktop` on Linux, a LaunchAgent in
+  `~/Library/LaunchAgents` on macOS, or a `Run` entry for your user on Windows,
+  and removes it when turned off. `zapfast --start-hidden` does the same by hand;
+  it opens the window anyway when no tray is available. The Flatpak does not
+  offer this setting yet.
 - **Desktop notifications.** Get notifications with the chat picture when you
   are away from the open chat. Muted chats do not notify you, and archived
   chats stay quiet until you unarchive them. Windows notifications
