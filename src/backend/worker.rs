@@ -35,6 +35,7 @@ use whatsapp_rust::waproto::buffa::Message as _;
 use whatsapp_rust::{MediaRetryResult, MediaReuploadRequest};
 
 mod device_store;
+mod interactive;
 mod poll_history;
 mod polls;
 
@@ -397,9 +398,11 @@ pub async fn run(
         poll_decrypting: 0,
         poll_history: Default::default(),
         poll_sending: HashSet::new(),
+        interactive_sending: HashMap::new(),
     };
     worker.load_state();
     worker.backfill();
+    worker.backfill_interactive();
     worker.relocate_media();
     discard_attachment_staging(&worker.dirs.media_cache_dir());
     discard_attachment_staging(&worker.dirs.sticker_cache_dir());
@@ -467,6 +470,7 @@ struct Worker {
     poll_decrypting: usize,
     poll_history: poll_history::Requests,
     poll_sending: HashSet<(ChatId, String)>,
+    interactive_sending: HashMap<(ChatId, String), String>,
     dirs: AppDirs,
     events: std::sync::mpsc::Sender<Event>,
     commands: mpsc::UnboundedSender<Command>,
@@ -507,8 +511,8 @@ struct Worker {
     sticker_fetches: HashSet<String>,
     /// Active chat-sticker downloads by chat and message id.
     sticker_downloads: HashSet<(ChatId, String)>,
-    /// Active attachment downloads by chat and message id.
-    downloads: HashSet<(ChatId, String)>,
+    /// Active attachment downloads by chat, message id, and carousel card.
+    downloads: HashSet<(ChatId, String, Option<usize>)>,
 }
 
 /// Decoded history chunk waiting to be canonicalized and archived.
@@ -832,7 +836,19 @@ impl Worker {
     /// repairs moved attachment paths or clears missing files for redownload.
     fn relocate_media(&mut self) {
         let dir = self.dirs.media_cache_dir();
-        let rows = match self.archive.media_paths() {
+        let rows = match self.archive.media_paths().and_then(|rows| {
+            let mut all: Vec<_> = rows
+                .into_iter()
+                .map(|(chat, id, path)| (chat, id, None, path))
+                .collect();
+            all.extend(
+                self.archive
+                    .carousel_media_paths()?
+                    .into_iter()
+                    .map(|(chat, id, card, path)| (chat, id, Some(card), path)),
+            );
+            Ok(all)
+        }) {
             Ok(rows) => rows,
             Err(error) => {
                 log::warn!("could not list attachments: {error}");
@@ -840,19 +856,27 @@ impl Worker {
             }
         };
         let (mut moved, mut forgotten) = (0, 0);
-        for (chat, id, path) in rows {
+        for (chat, id, card, path) in rows {
             if path.exists() {
                 continue;
             }
             let candidate = path.file_name().map(|name| dir.join(name));
             match candidate.filter(|candidate| candidate.exists()) {
                 Some(candidate) => {
-                    if self.archive.set_media_path(&chat, &id, &candidate).is_ok() {
+                    if self
+                        .archive
+                        .put_media_path_at(&chat, &id, card, Some(&candidate))
+                        .is_ok()
+                    {
                         moved += 1;
                     }
                 }
                 None => {
-                    if self.archive.clear_media_path(&chat, &id).is_ok() {
+                    if self
+                        .archive
+                        .put_media_path_at(&chat, &id, card, None)
+                        .is_ok()
+                    {
                         forgotten += 1;
                     }
                 }
@@ -894,9 +918,12 @@ impl Worker {
             if matches!(existing.content, Content::Revoked) {
                 continue;
             }
-            if let (Some(new), Some(old)) = (content.media_mut(), existing.content.media()) {
-                new.path = old.path.clone();
+            // Edits do not replace the raw protobuf; keep an edited interactive
+            // body, as `backfill_interactive` does.
+            if existing.edited && matches!(content, Content::Interactive { .. }) {
+                continue;
             }
+            content.keep_local_paths(&existing.content);
             let mentions = self.mentions_of(&mentioned_of(base));
             let thumbnail = thumbnail_of(base);
             if self
@@ -1754,6 +1781,7 @@ impl Worker {
         self.presence_subscribed.clear();
         self.read_sync = ReadSync::default();
         self.poll_sending.clear();
+        self.interactive_sending.clear();
         self.poll_history = Default::default();
         self.pending_older.clear();
         self.pending_avatars.clear();
@@ -1997,11 +2025,8 @@ impl Worker {
                         && let Some(mut content) = classify(edited.get_base_message())
                     {
                         // Preserve downloaded media when updating a caption.
-                        if let Ok(Some(existing)) = self.archive.message(&chat, &target)
-                            && let (Some(new), Some(old)) =
-                                (content.media_mut(), existing.content.media())
-                        {
-                            new.path = old.path.clone();
+                        if let Ok(Some(existing)) = self.archive.message(&chat, &target) {
+                            content.keep_local_paths(&existing.content);
                         }
                         if let Ok(true) = self.archive.set_content(&chat, &target, &content, true) {
                             self.emit_message(&chat, &target);
@@ -2065,7 +2090,19 @@ impl Worker {
         };
         let is_poll = matches!(row.content, Content::Poll { .. });
         self.remember_poll(&row, message, &info.source.sender.to_non_ad_string(), None);
-        self.store_message(row, Some(message.encode_to_vec()), push_name.as_deref());
+        // A new, normally delivered creation has no earlier votes to recover.
+        // Offline delivery, PDO recovery and replay of an archived poll do not
+        // establish that baseline: they may already have votes on the phone.
+        let poll_baseline = is_poll
+            && !info.is_offline
+            && info.unavailable_request_id.is_none()
+            && matches!(self.archive.message(&chat, &row.id), Ok(None));
+        self.archive_message(
+            row,
+            Some(message.encode_to_vec()),
+            push_name.as_deref(),
+            poll_baseline,
+        );
         if is_poll {
             self.pump_poll_votes();
         }
@@ -2269,6 +2306,19 @@ impl Worker {
 
     /// Archives a message and emits chat and row updates.
     fn store_message(&mut self, message: Message, raw: Option<Vec<u8>>, push_name: Option<&str>) {
+        self.archive_message(message, raw, push_name, false);
+    }
+
+    /// Stores `message`; `poll_baseline` records a live poll creation's
+    /// zero-vote baseline once the row is archived, before the interface
+    /// hears of it. A skipped or failed insert leaves no baseline behind.
+    fn archive_message(
+        &mut self,
+        message: Message,
+        raw: Option<Vec<u8>>,
+        push_name: Option<&str>,
+        poll_baseline: bool,
+    ) {
         if self.predates_removal(&message.chat, message.timestamp) {
             return;
         }
@@ -2289,6 +2339,9 @@ impl Worker {
         if let Err(error) = self.archive.insert_message(&message, raw.as_deref()) {
             log::warn!("could not store a message: {error}");
             return;
+        }
+        if poll_baseline && let Err(error) = self.archive.mark_poll_history(&chat, &message.id) {
+            log::warn!("could not store a live poll baseline: {error}");
         }
         let unread = is_new
             && !message.from_me
@@ -2844,6 +2897,7 @@ impl Worker {
     async fn handle_command(&mut self, command: Command) {
         let destination = match &command {
             Command::SendText { chat, .. }
+            | Command::ReplyInteractive { chat, .. }
             | Command::SendVoice { chat, .. }
             | Command::SendFiles { chat, .. }
             | Command::SendImage { chat, .. }
@@ -2910,6 +2964,14 @@ impl Worker {
                 quoting,
                 mentions,
             } => self.send_text(chat, text, quoting, mentions),
+            Command::ReplyInteractive {
+                chat,
+                message,
+                button,
+                choice,
+            } => {
+                self.reply_interactive(chat, message, button, choice);
+            }
             Command::Forward {
                 from_chat,
                 message,
@@ -2969,7 +3031,11 @@ impl Worker {
                     let _ = self.archive.set_ephemeral(&chat, expiration, timestamp);
                 }
             }
-            Command::Download { chat, message } => self.download(chat, message),
+            Command::Download {
+                card,
+                chat,
+                message,
+            } => self.download_media(chat, message, card),
             Command::FetchAvatar { id, full } => self.fetch_avatar(id, full),
             Command::EditText {
                 chat,
@@ -3456,6 +3522,20 @@ impl Worker {
                 self.handle_failed_group(chat, permanent);
             }
             Command::Sent { chat, id, error } => {
+                let completed = self.interactive_sending.iter().find_map(
+                    |((pending_chat, source), pending_id)| {
+                        (pending_chat == &chat && pending_id == &id).then(|| source.clone())
+                    },
+                );
+                if let Some(message) = completed {
+                    self.interactive_sending
+                        .remove(&(chat.clone(), message.clone()));
+                    self.emit(Event::InteractiveReplyState {
+                        chat: chat.clone(),
+                        message,
+                        pending: false,
+                    });
+                }
                 if id.is_empty() {
                     // This is a command failure, not a failed message send.
                     if let Some(error) = error {
@@ -3476,7 +3556,12 @@ impl Worker {
                     self.emit(Event::Error(format!("Message not sent: {error}")));
                 }
             }
-            Command::Downloaded { chat, id, result } => self.downloaded(chat, id, result),
+            Command::Downloaded {
+                card,
+                chat,
+                id,
+                result,
+            } => self.downloaded(chat, id, card, result),
             Command::AvatarFetched { id, full, path } => {
                 self.emit(Event::Avatar { id, full, path })
             }
@@ -3630,7 +3715,10 @@ impl Worker {
         };
         if matches!(
             source.content,
-            Content::Revoked | Content::Unsupported { .. } | Content::Poll { .. }
+            Content::Revoked
+                | Content::Unsupported { .. }
+                | Content::Poll { .. }
+                | Content::Interactive { .. }
         ) {
             self.emit(Event::Error("This message cannot be forwarded".to_owned()));
             return;
@@ -3834,11 +3922,15 @@ impl Worker {
     }
 
     fn download(&mut self, chat: ChatId, id: String) {
-        if !self.downloads.insert((chat.clone(), id.clone())) {
+        self.download_media(chat, id, None);
+    }
+
+    fn download_media(&mut self, chat: ChatId, id: String, card: Option<usize>) {
+        if !self.downloads.insert((chat.clone(), id.clone(), card)) {
             return;
         }
         let Some(client) = self.client.clone() else {
-            self.downloaded(chat, id, Err("Not connected to WhatsApp".to_owned()));
+            self.downloaded(chat, id, card, Err("Not connected to WhatsApp".to_owned()));
             return;
         };
         let raw = self.archive.raw(&chat, &id).ok().flatten();
@@ -3846,11 +3938,28 @@ impl Worker {
             self.downloaded(
                 chat,
                 id,
+                card,
                 Err("Attachment download keys are missing".to_owned()),
             );
             return;
         };
-        let base = message.get_base_message().clone();
+        let original = message.get_base_message();
+        let base = match interactive::image_at(original, card) {
+            Some(image) => wa::Message {
+                image_message: MessageField::some(image.clone()),
+                ..Default::default()
+            },
+            None if card.is_none() => original.clone(),
+            None => {
+                self.downloaded(
+                    chat,
+                    id,
+                    card,
+                    Err("This card has no downloadable image".to_owned()),
+                );
+                return;
+            }
+        };
         let (downloadable, mime, file_name): (Box<dyn Downloadable>, String, Option<String>) =
             if let Some(image) = base.image_message.as_option() {
                 (
@@ -3890,12 +3999,13 @@ impl Worker {
                 self.downloaded(
                     chat,
                     id,
+                    card,
                     Err("This message has no downloadable file".to_owned()),
                 );
                 return;
             };
         if attachment_is_too_large(downloadable.file_length()) {
-            self.downloaded(chat, id, Err(ATTACHMENT_LIMIT_ERROR.to_owned()));
+            self.downloaded(chat, id, card, Err(ATTACHMENT_LIMIT_ERROR.to_owned()));
             return;
         }
         // Keep metadata needed for one media re-upload request and retry.
@@ -3968,7 +4078,8 @@ impl Worker {
         let dir = self.dirs.media_cache_dir();
         let commands = self.commands.clone();
         tokio::spawn(async move {
-            let path = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
+            let cache_id = card.map_or_else(|| id.clone(), |index| format!("{id}-card-{index}"));
+            let path = media_path(&dir, &chat, &cache_id, &mime, file_name.as_deref());
             let result = with_attachment_deadline(ATTACHMENT_TIMEOUT, async {
                 match download_attachment(&client, &*downloadable, &dir, &path).await {
                     Ok(path) => Ok(path),
@@ -4010,18 +4121,30 @@ impl Worker {
                 }
             })
             .await;
-            let _ = commands.send(Command::Downloaded { chat, id, result });
+            let _ = commands.send(Command::Downloaded {
+                card,
+                chat,
+                id,
+                result,
+            });
         });
     }
 
     /// Files the result and releases any picker request that started it.
-    fn downloaded(&mut self, chat: ChatId, id: String, result: Result<PathBuf, String>) {
+    fn downloaded(
+        &mut self,
+        chat: ChatId,
+        id: String,
+        card: Option<usize>,
+        result: Result<PathBuf, String>,
+    ) {
         if let Ok(path) = &result {
-            let _ = self.archive.set_media_path(&chat, &id, path);
+            let _ = self.archive.put_media_path_at(&chat, &id, card, Some(path));
         }
-        self.downloads.remove(&(chat.clone(), id.clone()));
+        self.downloads.remove(&(chat.clone(), id.clone(), card));
         let for_picker = self.sticker_downloads.remove(&(chat.clone(), id.clone()));
         self.emit(Event::Media {
+            card,
             chat,
             message: id,
             result,
@@ -5110,7 +5233,7 @@ fn context_of(base: &wa::Message) -> Option<&wa::ContextInfo> {
     {
         return poll.context_info.as_option();
     }
-    None
+    interactive::context(base)
 }
 
 /// Returns raw JIDs mentioned by a message.
@@ -5148,7 +5271,7 @@ fn thumbnail_of(base: &wa::Message) -> Option<Vec<u8>> {
     } else if let Some(text) = base.extended_text_message.as_option() {
         text.jpeg_thumbnail.clone()
     } else {
-        None
+        interactive::image(base).and_then(|image| image.jpeg_thumbnail.clone())
     };
     bytes.filter(|bytes| !bytes.is_empty())
 }
@@ -5309,16 +5432,8 @@ fn classify(base: &wa::Message) -> Option<Content> {
     if base.sticker_pack_message.is_set() {
         return unsupported("sticker pack");
     }
-    if base.interactive_message.is_set()
-        || base.buttons_message.is_set()
-        || base.list_message.is_set()
-        || base.template_message.is_set()
-        || base.buttons_response_message.is_set()
-        || base.list_response_message.is_set()
-        || base.interactive_response_message.is_set()
-        || base.template_button_reply_message.is_set()
-    {
-        return unsupported("interactive message");
+    if let Some(content) = interactive::classify(base) {
+        return Some(content);
     }
     if base.product_message.is_set() || base.order_message.is_set() {
         return unsupported("product");
@@ -6803,7 +6918,7 @@ mod receipt_tests {
     use crate::model::{Content, Delivery, Message};
 
     const ME: &str = "15550001111@s.whatsapp.net";
-    const PEER: &str = "4917663430455@s.whatsapp.net";
+    pub(super) const PEER: &str = "4917663430455@s.whatsapp.net";
     const PEER_LID: &str = "167650256810092@lid";
 
     #[tokio::test]
@@ -6950,11 +7065,12 @@ mod receipt_tests {
             poll_decrypting: 0,
             poll_history: Default::default(),
             poll_sending: HashSet::new(),
+            interactive_sending: HashMap::new(),
         };
         (worker, events_rx, inbox, wa_events)
     }
 
-    fn own_message(id: &str, timestamp: i64) -> Message {
+    pub(super) fn own_message(id: &str, timestamp: i64) -> Message {
         Message {
             id: id.into(),
             chat: PEER.into(),
