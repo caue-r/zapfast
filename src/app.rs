@@ -557,7 +557,9 @@ impl App {
             notification_opens: Default::default(),
             notifications: Default::default(),
         };
-        app.player.set_speed(app.settings.voice_speed);
+        // A hand-edited speed snaps to a supported one, so a speed control
+        // always shows the speed that plays.
+        app.settings.voice_speed = app.player.set_speed(app.settings.voice_speed);
         app
     }
 
@@ -2599,8 +2601,8 @@ impl App {
                     self.toast_error(error);
                 }
             }
-            Action::CycleVoiceSpeed => {
-                self.settings.voice_speed = self.player.cycle_speed();
+            Action::SetVoiceSpeed(speed) => {
+                self.settings.voice_speed = self.player.set_speed(speed);
                 self.mark_settings_dirty();
             }
             Action::StartRecording => {
@@ -5338,6 +5340,33 @@ mod tests {
         assert!(app.open_chat.is_none());
         app.open_chat(id.into());
         assert_eq!(app.composer, "unfinished message");
+    }
+
+    #[test]
+    fn a_saved_speed_between_choices_snaps_to_one() {
+        let root = std::env::temp_dir().join(format!("zapfast-speed-{}", std::process::id()));
+        let settings = Settings {
+            voice_speed: 1.3,
+            ..Settings::default()
+        };
+        let app = App::headless(AppDirs::under(&root), settings).0;
+        assert_eq!(app.player.speed(), 1.25);
+        assert_eq!(app.settings.voice_speed, 1.25);
+    }
+
+    #[test]
+    fn direct_speed_selection_reaches_player_and_settings() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+
+        for speed in crate::audio::SPEEDS {
+            app.apply(Action::SetVoiceSpeed(speed), &ctx);
+            assert_eq!(app.player.speed(), speed);
+            assert_eq!(app.settings.voice_speed, speed);
+        }
+
+        app.apply(Action::SetVoiceSpeed(4.0), &ctx);
+        assert_eq!(app.settings.voice_speed, crate::audio::SPEEDS[4]);
     }
 
     #[test]

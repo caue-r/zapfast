@@ -1685,6 +1685,9 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     bad_key: true,
                 });
             }
+            // With "voice": the menu of a playable voice message, which
+            // lists every playback speed.
+            "voice-menu" => app.open_message_menu = Some("ada-voice".into()),
             "react-menu" => {
                 app.open_message_menu = Some("ada-link".into());
                 if let Some(row) = app
@@ -2853,6 +2856,7 @@ mod tests {
             "staged",
             "compose-emoji",
             "voice",
+            "voice,voice-menu",
             "recording",
             "gifs",
             "gifs-badkey",
@@ -2940,6 +2944,64 @@ mod tests {
             pressed: true,
             repeat: false,
             modifiers,
+        }
+    }
+
+    #[test]
+    fn the_speed_chip_cycles_and_the_menu_offers_every_speed() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        // The speed row only appears for a downloaded clip, so give the open
+        // sample chat one voice message that carries a media path.
+        let chat = sample_ids()[0].to_owned();
+        let mut clip = media("audio/ogg; codecs=opus", 12_000, None, None);
+        clip.path = Some(std::path::PathBuf::from("demo/voice.ogg"));
+        app.conversations.get_mut(&chat).unwrap().messages = vec![message(
+            &chat,
+            "voice-speed",
+            false,
+            100,
+            Content::Audio {
+                media: clip,
+                seconds: Some(5),
+                voice_note: true,
+                waveform: demo_waveform(),
+            },
+        )];
+        render(&mut app, &ctx);
+        let click = |app: &mut App, id: egui::Id, button: egui::PointerButton| {
+            let pos = ctx
+                .data(|data| data.get_temp::<egui::Rect>(id))
+                .expect("the speed control is on screen")
+                .center();
+            let press = |pressed| egui::Event::PointerButton {
+                pos,
+                button,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            frame_with(app, &ctx, vec![egui::Event::PointerMoved(pos), press(true)]);
+            frame_with(app, &ctx, vec![press(false)]);
+            // Draw once more so a menu opened by the click is laid out.
+            frame_with(app, &ctx, Vec::new());
+        };
+        let chip = crate::ui::conversation::speed_chip_id(&chat, "voice-speed");
+        // The chip cycles 1x, 1.5x, and 2x, as on the phone.
+        for expected in [1.5, 2.0, 1.0] {
+            click(&mut app, chip, egui::PointerButton::Primary);
+            assert_eq!(app.player.speed(), expected);
+            assert_eq!(app.settings.voice_speed, expected);
+        }
+        // Right-clicking it opens the message menu, which lists every speed.
+        for option in crate::audio::SPEEDS.into_iter().rev() {
+            click(&mut app, chip, egui::PointerButton::Secondary);
+            let choice = crate::ui::conversation::speed_button_id(&chat, "voice-speed", option);
+            click(&mut app, choice, egui::PointerButton::Primary);
+            assert_eq!(
+                app.settings.voice_speed, option,
+                "choosing {option}x from the menu reaches App and settings"
+            );
         }
     }
 
