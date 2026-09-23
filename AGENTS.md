@@ -336,3 +336,19 @@ A release is not finished when the tag is pushed. Do these in order:
   compiled.
 - Never log message contents, phone numbers, keys, or QR payloads at a
   level that ships. The log file is meant to be attached to bug reports.
+
+## Disk use
+
+Build caches save hours of recompiling, so keep them, but keep them small:
+
+- Use one build cache per project: `target/` in the main checkout. Git
+  worktrees and parallel agents set `CARGO_TARGET_DIR` to that directory
+  instead of building their own; a fresh target costs 20 GB or more.
+- Never put build output or large scratch files in `/tmp`. It is a small
+  in-memory filesystem with a per-user quota, and filling it breaks every
+  shell on the machine.
+- Rotate the cache: `cargo sweep --time 14` (from `cargo install cargo-sweep`)
+  removes artifacts unused for two weeks. If `target/` still exceeds about
+  60 GB, run `cargo clean`.
+- Delete one-off QA, packaging, and release-validation directories (under
+  `.cache/` or `~/.cache/`) once their result is recorded.
