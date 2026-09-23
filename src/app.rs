@@ -277,6 +277,8 @@ pub struct App {
     pub focus_search: bool,
     pub quit_requested: bool,
     pub window_focused: bool,
+    /// Presence last reported to the backend.
+    reported_online: Option<bool>,
     /// Cross-thread window repaint handle.
     waker: Waker,
     tray: Option<TrayService>,
@@ -484,6 +486,7 @@ impl App {
             focus_search: false,
             quit_requested: false,
             window_focused: false,
+            reported_online: None,
             waker,
             tray: None,
             window_hidden: false,
@@ -3069,6 +3072,16 @@ impl App {
         });
     }
 
+    /// Tells the backend whether the person is looking at the app, so the
+    /// phone keeps its notifications while they are not.
+    fn report_presence(&mut self) {
+        let online = self.window_focused && !self.window_hidden;
+        if self.reported_online != Some(online) {
+            self.reported_online = Some(online);
+            self.backend.send(Command::SetOnline(online));
+        }
+    }
+
     /// Processes app state shared by windowed and headless modes.
     pub fn background_frame(&mut self, ctx: &egui::Context) {
         // Events are drained before frame_ui observes focus. Losing focus in
@@ -3076,6 +3089,7 @@ impl App {
         if self.window_hidden || ctx.input(|input| input.viewport().focused) == Some(false) {
             self.window_focused = false;
         }
+        self.report_presence();
         self.handle_tray();
         #[cfg(target_os = "macos")]
         self.actions.extend(crate::macos::drain(self.window_hidden));
@@ -3186,6 +3200,7 @@ impl App {
             self.refocus_composer(ctx);
         }
         self.window_focused = focused;
+        self.report_presence();
         // Close the window and continue headless when background mode is enabled.
         if ctx.input(|input| input.viewport().close_requested())
             && !self.quit_requested
@@ -3997,6 +4012,32 @@ mod tests {
         let mut output = ctx.run_ui(input, |ui| app.background_frame(ui.ctx()));
         output.textures_delta.clear();
         assert_eq!(app.chat(&chat.id).unwrap().unread, 1);
+    }
+
+    #[test]
+    fn presence_follows_focus_and_the_hidden_window() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let mut reported = || {
+            std::iter::from_fn(|| commands.try_recv().ok())
+                .filter_map(|command| match command {
+                    Command::SetOnline(online) => Some(online),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        app.window_focused = true;
+        app.report_presence();
+        app.report_presence();
+        assert_eq!(reported(), [true]);
+        app.window_gone();
+        app.report_presence();
+        assert_eq!(reported(), [false]);
+        // Focus left over from a window callback does not count while hidden.
+        app.window_focused = true;
+        app.report_presence();
+        assert!(reported().is_empty());
     }
 
     #[test]

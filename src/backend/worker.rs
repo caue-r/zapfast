@@ -397,6 +397,9 @@ pub async fn run(
         group_info_tries: HashMap::new(),
         group_info_retry: Vec::new(),
         presence_subscribed: HashSet::new(),
+        online_wanted: false,
+        online_changed: Instant::now(),
+        online_sent: None,
         pending_older: HashMap::new(),
         older_warned: HashSet::new(),
         pending_avatars: HashMap::new(),
@@ -449,6 +452,7 @@ pub async fn run(
             }
             _ = tick.tick() => {
                 worker.reveal_unconfirmed_after_grace();
+                worker.settle_presence();
                 worker.refresh_legacy_preferences();
                 worker.expire_older_requests();
                 worker.retry_avatars();
@@ -474,6 +478,9 @@ enum RuntimeEvent {
 /// How long private content waits for phone lock state before it is shown
 /// unconfirmed. A healthy sync answers well within this.
 const PRIVACY_GRACE: Duration = Duration::from_secs(10);
+
+/// How long ZapFast stays "available" after the window loses focus.
+const PRESENCE_LINGER: Duration = Duration::from_secs(10);
 
 /// Waits longer after each failed lock-state recovery, so a collection the
 /// server keeps refusing is not rebuilt every few seconds.
@@ -540,6 +547,12 @@ struct Worker {
     /// Next retry time for failed group metadata requests.
     group_info_retry: Vec<(Instant, String)>,
     presence_subscribed: HashSet<String>,
+    /// Whether the window is focused and visible.
+    online_wanted: bool,
+    /// When `online_wanted` last changed.
+    online_changed: Instant,
+    /// The presence last announced on this connection.
+    online_sent: Option<bool>,
     /// Pending phone-history request time and boundary by chat.
     pending_older: HashMap<ChatId, (Instant, super::PageKey)>,
     /// Chats already notified about a phone-history timeout.
@@ -1028,6 +1041,54 @@ impl Worker {
                 "Could not start WhatsApp: {error}"
             ))),
         }
+    }
+
+    fn set_online(&mut self, online: bool) {
+        if self.online_wanted != online {
+            self.online_wanted = online;
+            self.online_changed = Instant::now();
+        }
+        // Coming back is announced at once; leaving waits for the tick, so a
+        // quick switch to another window does not flap.
+        if online {
+            self.announce_presence(true);
+        }
+    }
+
+    /// Announces "unavailable" once the window has stayed away long enough.
+    fn settle_presence(&mut self) {
+        if self.unavailable_due() {
+            self.announce_presence(false);
+        }
+    }
+
+    fn unavailable_due(&self) -> bool {
+        !self.online_wanted
+            && self.online_sent != Some(false)
+            && self.online_changed.elapsed() >= PRESENCE_LINGER
+    }
+
+    /// WhatsApp holds back push notifications on the phone while a linked
+    /// device is available, as WhatsApp Web does while its tab has focus.
+    fn announce_presence(&mut self, online: bool) {
+        if self.online_sent == Some(online) || !matches!(self.status, LinkStatus::Connected) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.online_sent = Some(online);
+        tokio::spawn(async move {
+            let presence = client.presence();
+            let result = if online {
+                presence.set_available().await
+            } else {
+                presence.set_unavailable().await
+            };
+            if let Err(error) = result {
+                log::debug!("presence not announced: {error}");
+            }
+        });
     }
 
     fn refresh_legacy_preferences(&mut self) {
@@ -1587,10 +1648,9 @@ impl Worker {
                 if let Some(client) = self.client.clone() {
                     let me = self.me_pn.clone().and_then(|pn| Self::jid_of(&pn));
                     let commands = self.commands.clone();
+                    self.online_sent = None;
+                    self.announce_presence(self.online_wanted);
                     tokio::spawn(async move {
-                        if let Err(error) = client.presence().set_available().await {
-                            log::debug!("presence not announced: {error}");
-                        }
                         // whatsapp-rust also enforces the account privacy setting.
                         match client.fetch_privacy_settings().await {
                             Ok(settings) => {
@@ -3392,6 +3452,7 @@ impl Worker {
             Command::ReceiptsPrivacy { disabled } => {
                 self.emit(Event::ReceiptsPrivacy { disabled });
             }
+            Command::SetOnline(online) => self.set_online(online),
             Command::InspectUpdate => {
                 let events = self.events.clone();
                 let waker = self.waker.clone();
@@ -6846,6 +6907,24 @@ mod tests {
     }
 
     #[test]
+    fn leaving_the_window_waits_before_going_unavailable() {
+        let (mut worker, _events, _, _) = receipt_tests::worker();
+        worker.set_online(true);
+        worker.set_online(false);
+        assert!(!worker.unavailable_due());
+        worker.online_changed = Instant::now() - PRESENCE_LINGER;
+        worker.set_online(false);
+        assert!(
+            worker.unavailable_due(),
+            "repeating the same state does not restart the wait"
+        );
+        worker.online_sent = Some(false);
+        assert!(!worker.unavailable_due(), "announced once per connection");
+        worker.set_online(true);
+        assert!(!worker.unavailable_due());
+    }
+
+    #[test]
     fn privacy_recovery_backs_off() {
         assert_eq!(privacy_backoff(1), Duration::from_secs(30));
         assert_eq!(privacy_backoff(2), Duration::from_secs(60));
@@ -7277,6 +7356,9 @@ mod receipt_tests {
             group_info_tries: HashMap::new(),
             group_info_retry: Vec::new(),
             presence_subscribed: HashSet::new(),
+            online_wanted: false,
+            online_changed: Instant::now(),
+            online_sent: None,
             pending_older: HashMap::new(),
             older_warned: HashSet::new(),
             pending_avatars: HashMap::new(),

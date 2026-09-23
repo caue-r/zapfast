@@ -177,7 +177,9 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 - **Groups.** See members, sender names, and sender pictures. Announcement
   groups are read-only for non-admins.
 - **Presence.** See online, last-seen, and typing status, and send your typing
-  status.
+  status. Like WhatsApp Web, ZapFast shows you as online only while its window
+  is focused, and goes offline ten seconds after you switch away or hide it to
+  the tray, so your phone keeps receiving notifications meanwhile.
 - **Idle rendering.** History-sync progress updates when data arrives. Animated
   stickers and GIFs show a still first frame and play while hovered in the
   focused window, keeping idle conversations from continuously repainting.
