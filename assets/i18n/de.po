@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-23 12:25+0200\n"
+"POT-Creation-Date: 2026-09-23 14:39+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: German\n"
@@ -151,19 +151,19 @@ msgstr "Archiviert"
 msgid "Locked"
 msgstr "Gesperrt"
 
-#: src/ui/conversation.rs:87
+#: src/ui/conversation.rs:161
 msgid "Ctrl+K to search · ? for keyboard shortcuts"
 msgstr "Strg+K zum Suchen · ? für Tastenkürzel"
 
-#: src/ui/conversation.rs:908
+#: src/ui/conversation.rs:988
 msgid "Type a message"
 msgstr "Nachricht eingeben"
 
-#: src/ui/conversation.rs:911
+#: src/ui/conversation.rs:991
 msgid "Add a caption"
 msgstr "Bildunterschrift hinzufügen"
 
-#: src/ui/conversation.rs:1063
+#: src/ui/conversation.rs:1145
 msgid ""
 "Enter sends · Shift+Enter for a new line · *bold* _italic_ ~strike~ · Ctrl+V "
 "pastes a picture"
@@ -171,29 +171,30 @@ msgstr ""
 "Eingabetaste sendet · Umschalt+Eingabe für neue Zeile · *fett* _kursiv_ "
 "~durchgestrichen~ · Strg+V fügt ein Bild ein"
 
-#: src/ui/conversation.rs:1065
+#: src/ui/conversation.rs:1147
 msgid "Ctrl+Enter sends · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture"
 msgstr ""
 "Strg+Eingabetaste sendet · *fett* _kursiv_ ~durchgestrichen~ · Strg+V fügt "
 "ein Bild ein"
 
-#: src/ui/conversation.rs:1076
+#: src/ui/conversation.rs:1158
 msgid "Hide shortcut hints (restore in Settings)"
 msgstr ""
 "Tastenkürzel-Hinweise ausblenden (in den Einstellungen wiederherstellen)"
 
-#: src/ui/conversation.rs:1091
+#: src/ui/conversation.rs:1173
 #, rust-format
 msgid "All shortcuts ({})"
 msgstr "Alle Tastenkürzel ({})"
 
-#: src/ui/conversation.rs:1356
+#: src/ui/conversation.rs:1444
+#, rust-format
 msgid "{} unread message"
 msgid_plural "{} unread messages"
 msgstr[0] "{} ungelesene Nachricht"
 msgstr[1] "{} ungelesene Nachrichten"
 
-#: src/ui/dialogs.rs:1105
+#: src/ui/dialogs.rs:1141
 #, rust-format
 msgid "{} member"
 msgid_plural "{} members"
@@ -220,14 +221,14 @@ msgstr "Automatisch"
 msgid "Window"
 msgstr "Fenster"
 
-#: src/ui/settings.rs:258
+#: src/ui/settings.rs:262
 msgid "Account"
 msgstr "Konto"
 
-#: src/ui/settings.rs:285
+#: src/ui/settings.rs:289
 msgid "Files"
 msgstr "Dateien"
 
-#: src/ui/settings.rs:318
+#: src/ui/settings.rs:334
 msgid "About"
 msgstr "Über"
