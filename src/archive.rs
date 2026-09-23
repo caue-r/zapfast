@@ -1230,6 +1230,26 @@ impl Archive {
         rows.collect()
     }
 
+    /// The id of `sender`'s newest live location in `chat` sent at or after
+    /// `since`.
+    pub fn latest_live_location(
+        &self,
+        chat: &str,
+        sender: &str,
+        since: i64,
+    ) -> Result<Option<String>> {
+        self.connection
+            .query_row(
+                "SELECT id FROM messages
+                 WHERE chat = ?1 AND timestamp >= ?3 AND sender = ?2
+                   AND json_extract(content, '$.kind') = 'livelocation'
+                 ORDER BY timestamp DESC LIMIT 1",
+                params![chat, sender, since],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
     pub fn message(&self, chat: &str, id: &str) -> Result<Option<Message>> {
         let mut statement = self.connection.prepare(
             "SELECT sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
@@ -1699,6 +1719,82 @@ pub(crate) mod tests {
             archive.ephemeral_expiration(chat).expect("expiration"),
             Some(604_800)
         );
+    }
+
+    #[test]
+    fn live_location_round_trips_and_upserts_in_place() {
+        let archive = Archive::in_memory().expect("opens");
+        let chat = "1@s.whatsapp.net";
+        archive.ensure_chat(chat, "Ada").expect("chat");
+        let live = |sequence: i64, ended: bool, thumbnail: Option<Vec<u8>>| {
+            let mut row = message(chat, "live", 100, false);
+            row.content = Content::LiveLocation {
+                latitude: 51.5,
+                longitude: -0.12,
+                accuracy_m: Some(10),
+                speed_mps: Some(1.1),
+                heading_deg: Some(45),
+                sequence,
+                ended,
+                updated: 0,
+            };
+            row.thumbnail = thumbnail;
+            row
+        };
+        archive
+            .insert_message(&live(1, false, None), None)
+            .expect("insert");
+        let read = archive
+            .message(chat, "live")
+            .expect("read")
+            .expect("exists");
+        assert_eq!(read.content, live(1, false, None).content);
+        assert_eq!(read.thumbnail, None);
+
+        // A newer update replaces the row in place rather than appending one.
+        archive
+            .insert_message(&live(2, false, Some(vec![1, 2, 3])), None)
+            .expect("update");
+        let updated = archive
+            .message(chat, "live")
+            .expect("read")
+            .expect("exists");
+        assert_eq!(
+            updated.content,
+            Content::LiveLocation {
+                latitude: 51.5,
+                longitude: -0.12,
+                accuracy_m: Some(10),
+                speed_mps: Some(1.1),
+                heading_deg: Some(45),
+                sequence: 2,
+                ended: false,
+                updated: 0,
+            }
+        );
+        assert_eq!(updated.thumbnail, Some(vec![1, 2, 3]));
+        assert_eq!(
+            archive
+                .latest_live_location(chat, &updated.sender, 100)
+                .expect("query"),
+            Some("live".to_owned())
+        );
+        assert_eq!(
+            archive
+                .latest_live_location(chat, &updated.sender, 101)
+                .expect("query"),
+            None
+        );
+
+        let rows: i64 = archive
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE chat = ?1 AND id = ?2",
+                rusqlite::params![chat, "live"],
+                |row| row.get(0),
+            )
+            .expect("count");
+        assert_eq!(rows, 1);
     }
 
     #[test]

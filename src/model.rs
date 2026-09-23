@@ -324,6 +324,32 @@ pub enum Content {
         name: Option<String>,
         address: Option<String>,
     },
+    /// A live location that updates in place as the sender moves. The map
+    /// preview rides in `Message.thumbnail`; the shared `(chat, id)` upsert
+    /// keeps one bubble per session.
+    LiveLocation {
+        latitude: f64,
+        longitude: f64,
+        /// Position accuracy reported by the sender, in metres.
+        #[serde(default)]
+        accuracy_m: Option<u32>,
+        /// Speed in metres per second.
+        #[serde(default)]
+        speed_mps: Option<f32>,
+        /// Heading, degrees clockwise from magnetic north.
+        #[serde(default)]
+        heading_deg: Option<u32>,
+        /// Monotonic ordering guard against out-of-order updates.
+        #[serde(default)]
+        sequence: i64,
+        /// Whether the sender has stopped sharing.
+        #[serde(default)]
+        ended: bool,
+        /// Unix seconds of the latest position, or 0 before any update. The
+        /// message keeps its start time so updates do not reorder the chat.
+        #[serde(default)]
+        updated: i64,
+    },
     Contact {
         display_name: String,
         vcard: String,
@@ -466,7 +492,19 @@ impl PollDraft {
     }
 }
 
+/// WhatsApp's longest live location share, in seconds.
+pub const LIVE_LOCATION_LIMIT: i64 = 8 * 60 * 60;
+
 impl Content {
+    /// Whether a live location sent at `sent` has stopped by `now`: its
+    /// sender ended it, or it has outlived the longest share.
+    pub fn live_location_over(&self, sent: i64, now: i64) -> bool {
+        match self {
+            Self::LiveLocation { ended, .. } => *ended || now - sent > LIVE_LOCATION_LIMIT,
+            _ => false,
+        }
+    }
+
     pub fn text(text: impl Into<String>) -> Self {
         Self::Text {
             text: text.into(),
@@ -513,6 +551,13 @@ impl Content {
                 Some(name) => format!("Location: {name}"),
                 None => "Location".to_owned(),
             },
+            Self::LiveLocation { ended, .. } => {
+                if *ended {
+                    "Live location ended".to_owned()
+                } else {
+                    "Live location".to_owned()
+                }
+            }
             Self::Contact { display_name, .. } => format!("Contact: {display_name}"),
             Self::Poll { question, .. } => format!("Poll: {question}"),
             Self::Revoked => "This message was deleted".to_owned(),
@@ -1407,5 +1452,57 @@ mod tests {
         let json = serde_json::to_string(&content).expect("serializes");
         let back: Content = serde_json::from_str(&json).expect("parses");
         assert_eq!(back, content);
+    }
+
+    #[test]
+    fn live_location_content_survives_json() {
+        let content = Content::LiveLocation {
+            latitude: 51.5,
+            longitude: -0.12,
+            accuracy_m: Some(10),
+            speed_mps: Some(1.1),
+            heading_deg: Some(45),
+            sequence: 7,
+            ended: true,
+            updated: 1_700_000_000,
+        };
+        let json = serde_json::to_string(&content).expect("serializes");
+        let back: Content = serde_json::from_str(&json).expect("parses");
+        assert_eq!(back, content);
+        // Optional fields default when absent, so a sparse payload still parses.
+        let sparse: Content =
+            serde_json::from_str(r#"{"kind":"livelocation","latitude":1.0,"longitude":2.0}"#)
+                .expect("parses sparse");
+        assert_eq!(
+            sparse,
+            Content::LiveLocation {
+                latitude: 1.0,
+                longitude: 2.0,
+                accuracy_m: None,
+                speed_mps: None,
+                heading_deg: None,
+                sequence: 0,
+                ended: false,
+                updated: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn live_location_is_over_when_ended_or_older_than_the_longest_share() {
+        let live = |ended| Content::LiveLocation {
+            latitude: 0.0,
+            longitude: 0.0,
+            accuracy_m: None,
+            speed_mps: None,
+            heading_deg: None,
+            sequence: 1,
+            ended,
+            updated: 0,
+        };
+        assert!(!live(false).live_location_over(1_000, 1_000 + LIVE_LOCATION_LIMIT));
+        assert!(live(false).live_location_over(1_000, 1_001 + LIVE_LOCATION_LIMIT));
+        assert!(live(true).live_location_over(1_000, 1_000));
+        assert!(!Content::text("hi").live_location_over(0, i64::MAX));
     }
 }
