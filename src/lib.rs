@@ -35,5 +35,6 @@ pub mod tray;
 pub mod ui;
 pub mod updates;
 pub mod util;
+pub mod vsync;
 pub mod voice;
 pub mod wallpaper;
