@@ -883,6 +883,98 @@ pub fn populate(app: &mut App) {
     app.focus_composer = false;
 }
 
+/// A WhatsApp sticker pack shared by Ada, and with `open`, its stickers in
+/// the dialog that adds it.
+fn shared_pack_sample(app: &mut App, open: bool) {
+    let id = SAMPLES[0].id;
+    let Some(conversation) = app.conversations.get_mut(id) else {
+        return;
+    };
+    let Some(mut row) = conversation.messages.last().cloned() else {
+        return;
+    };
+    row.id = "ada-pack".into();
+    row.from_me = false;
+    row.sender = id.into();
+    row.quoted = None;
+    row.reactions.clear();
+    row.content = crate::model::Content::StickerPack {
+        name: "Ducks".into(),
+        publisher: "Ada Lovelace".into(),
+        count: 6,
+        caption: None,
+    };
+    conversation.messages.push(row);
+    app.scroll_to_bottom = true;
+    if open {
+        sticker_sample(app, crate::model::StickerShelf::Recent, "");
+        app.picker = None;
+        let ducks = app.sticker_packs.first().cloned();
+        app.sticker_preview = ducks.map(|pack| (pack, "Ada Lovelace".to_owned()));
+        app.dialog = Some(Dialog::StickerPack);
+    }
+}
+
+/// Opens the sticker tab on `shelf` with emoji stickers tagged the way
+/// WhatsApp tags them, a Signal-style pack, and a pack made here.
+fn sticker_sample(app: &mut App, shelf: crate::model::StickerShelf, search: &str) {
+    let dir = app.dirs.media_cache_dir().join("demo-stickers");
+    let _ = std::fs::create_dir_all(&dir);
+    let make = |character: char| -> Option<std::path::PathBuf> {
+        let path = dir.join(format!("{:x}.webp", character as u32));
+        if !path.exists() {
+            let emoji = tour::media::emoji_image(character, 150).ok()?;
+            let mut tile = image::RgbaImage::new(192, 192);
+            image::imageops::overlay(&mut tile, &emoji, 21, 21);
+            let mut webp = Vec::new();
+            image::codecs::webp::WebPEncoder::new_lossless(&mut webp)
+                .encode(&tile, 192, 192, image::ExtendedColorType::Rgba8)
+                .ok()?;
+            let info = crate::sticker_meta::StickerInfo {
+                emojis: vec![character.to_string()],
+                ..Default::default()
+            };
+            std::fs::write(&path, crate::sticker_meta::write(&webp, &info)?).ok()?;
+        }
+        Some(path)
+    };
+    let set = |characters: &str| -> Vec<std::path::PathBuf> {
+        characters.chars().filter_map(&make).collect()
+    };
+    app.picker = Some(crate::model::PickerTab::Stickers);
+    app.stickers = set("😂🐸🎉👋😎🚀🥳🙏🔥");
+    app.stickers_saved = set("❤😍🤣🐱");
+    let ducks = set("🦆🐤🐣🐥🦢🪿");
+    let local = set("☕🌅🌻");
+    app.sticker_packs = vec![
+        crate::model::StickerPack {
+            name: "Ducks".to_owned(),
+            dir: app.dirs.media_cache_dir().join("Ducks"),
+            stickers: ducks,
+            local: false,
+        },
+        crate::model::StickerPack {
+            name: "Bom dia".to_owned(),
+            dir: app.dirs.media_cache_dir().join("Bom dia"),
+            stickers: local,
+            local: true,
+        },
+    ];
+    app.sticker_emojis = app
+        .stickers
+        .iter()
+        .chain(&app.stickers_saved)
+        .chain(app.sticker_packs.iter().flat_map(|pack| &pack.stickers))
+        .filter_map(|path| {
+            let emojis = crate::sticker_meta::emojis(&std::fs::read(path).ok()?);
+            Some((path.clone(), emojis))
+        })
+        .collect();
+    app.stickers_pending = false;
+    app.sticker_shelf = shelf;
+    app.sticker_search = search.to_owned();
+}
+
 /// Applies the UI state selected by `--demo-page`.
 fn interactive_sample(app: &mut App, with_image: bool) {
     use crate::model::{InteractiveButton, InteractiveCard};
@@ -1972,17 +2064,31 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "private" => app.chat_filter = crate::model::ChatFilter::Private,
             "groups" => app.chat_filter = crate::model::ChatFilter::Groups,
             "picker" => app.picker = Some(crate::model::PickerTab::Emoji),
-            "stickers" => {
-                app.picker = Some(crate::model::PickerTab::Stickers);
-                let (_, sticker) = sample_files(app);
-                app.stickers_saved = vec![sticker.clone(); 3];
-                app.sticker_packs = vec![crate::model::StickerPack {
-                    name: "Happy Frogs".to_owned(),
-                    dir: std::path::PathBuf::from("Happy Frogs"),
-                    stickers: vec![sticker.clone(); 6],
-                    local: false,
-                }];
-                app.stickers = vec![sticker; 7];
+            "stickers" => sticker_sample(app, crate::model::StickerShelf::Recent, ""),
+            "sticker-favorites" => sticker_sample(app, crate::model::StickerShelf::Favorites, ""),
+            "sticker-pack" => {
+                let pack =
+                    crate::model::StickerShelf::Pack(app.dirs.media_cache_dir().join("Ducks"));
+                sticker_sample(app, pack, "")
+            }
+            "sticker-search" => sticker_sample(app, crate::model::StickerShelf::Recent, "laugh"),
+            "sticker-add" => sticker_sample(app, crate::model::StickerShelf::Add, ""),
+            "sticker-maker" => {
+                let (photo, _) = sample_files(app);
+                let crop = crate::model::StickerCrop::centered(900, 1200).resized(620, 900, 1200);
+                app.sticker_draft = Some(crate::model::StickerDraft {
+                    source: photo,
+                    width: 900,
+                    height: 1200,
+                    transparent: false,
+                    crop: crop.moved(0, 130, 900, 1200),
+                    keep_transparent: false,
+                    emojis: "🌅 🌊".into(),
+                });
+                app.dialog = Some(Dialog::StickerMaker);
+            }
+            "sticker-pack-message" | "sticker-pack-view" => {
+                shared_pack_sample(app, part == "sticker-pack-view")
             }
             "gifs" => {
                 app.picker = Some(crate::model::PickerTab::Gifs);
@@ -3302,6 +3408,13 @@ mod tests {
             "syncing",
             "picker",
             "stickers",
+            "sticker-favorites",
+            "sticker-pack",
+            "sticker-search",
+            "sticker-add",
+            "sticker-pack-message",
+            "sticker-maker",
+            "sticker-pack-view",
             "typing",
             "mention",
             "emoji-complete",

@@ -15,6 +15,7 @@ use crate::paths::AppDirs;
 // Re-exported so the picker can detect pasted Signal pack links.
 mod read_sync;
 pub(crate) mod sticker_import;
+mod sticker_maker;
 pub(crate) mod sticker_store;
 mod worker;
 pub use worker::{PINNED_CHATS, PLUS_PINNED_CHATS};
@@ -316,6 +317,23 @@ pub enum Command {
     SaveSticker {
         path: PathBuf,
     },
+    /// Internal: the phone received one favorite change, or refused it.
+    FavoritePushed {
+        hash: String,
+        updated_at: i64,
+        result: Result<Vec<u8>, String>,
+    },
+    /// Internal: every queued favorite change was sent.
+    FavoritesPushed,
+    /// Internal: a favorite from the phone finished downloading.
+    FavoriteFetched {
+        hash: String,
+        result: Result<PathBuf, String>,
+    },
+    /// Takes a sticker out of Recent here and on the phone.
+    RemoveRecentSticker {
+        path: PathBuf,
+    },
     /// Removes a saved sticker.
     ForgetSticker {
         path: PathBuf,
@@ -368,6 +386,46 @@ pub enum Command {
     /// Internal pack-import result. An empty error means the picker was canceled.
     StickerPackImported {
         result: Result<String, String>,
+    },
+    /// Downloads a sticker pack shared in a chat so it can be viewed.
+    ViewStickerPack {
+        chat: ChatId,
+        message: String,
+    },
+    /// Internal: a shared sticker pack finished downloading.
+    StickerPackViewed {
+        result: Result<(StickerPack, String), String>,
+    },
+    /// Copies a viewed pack into the packs here.
+    AddStickerPack {
+        dir: PathBuf,
+        name: String,
+    },
+    /// Sends a pack as a WhatsApp sticker pack message.
+    SendStickerPack {
+        chat: ChatId,
+        dir: PathBuf,
+    },
+    /// Chooses a picture to make a sticker from.
+    PickStickerPicture,
+    /// Internal: the chosen picture, its size, and whether it has see-through
+    /// pixels; or an empty error when the choice was cancelled.
+    StickerPicturePicked {
+        result: Result<(PathBuf, u32, u32, bool), String>,
+    },
+    /// Makes a sticker from a picture, then adds it to favorites or, with a
+    /// chat, sends it there.
+    MakeSticker {
+        source: PathBuf,
+        crop: crate::model::StickerCrop,
+        transparent: bool,
+        emojis: Vec<String>,
+        chat: Option<ChatId>,
+    },
+    /// Internal: a made sticker, and where it goes.
+    StickerMade {
+        result: Result<PathBuf, String>,
+        chat: Option<ChatId>,
     },
     /// Creates an empty local sticker pack under the given name.
     CreateStickerPack {
@@ -641,11 +699,24 @@ pub enum Event {
         query: String,
         results: Result<Vec<Gif>, GifError>,
     },
-    /// Saved stickers, imported packs, and recent stickers for the picker.
+    /// A picture chosen for the sticker maker: its file, size, and whether it
+    /// has see-through pixels.
+    StickerPicture {
+        path: PathBuf,
+        width: u32,
+        height: u32,
+        transparent: bool,
+    },
+    /// A shared sticker pack, ready to view, with its publisher; or why it
+    /// could not be opened.
+    StickerPackPreview(Result<(StickerPack, String), String>),
+    /// Favorite stickers, packs, and recent stickers for the picker, with
+    /// the emojis each sticker is tagged with.
     Stickers {
-        saved: Vec<PathBuf>,
+        favorites: Vec<PathBuf>,
         packs: Vec<StickerPack>,
         recent: Vec<PathBuf>,
+        emojis: std::collections::HashMap<PathBuf, Vec<String>>,
     },
     Media {
         card: Option<usize>,

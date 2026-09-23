@@ -38,6 +38,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ConfirmDeleteChat(_) | Dialog::JoinGroup | Dialog::ConfirmStartOver => {
                     380.0
                 }
+                Dialog::StickerPack => 420.0,
+                Dialog::StickerMaker => 400.0,
                 Dialog::Forward { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
                 Dialog::PollResults { .. }
@@ -72,6 +74,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
                 Dialog::JoinGroup => join_group(app, ui),
                 Dialog::ConfirmStartOver => confirm_start_over(app, ui),
+                Dialog::StickerPack => sticker_pack(app, ui),
+                Dialog::StickerMaker => sticker_maker(app, ui),
                 Dialog::MessageInfo { chat, message } => {
                     super::message_info::show(app, ui, &chat, &message)
                 }
@@ -781,6 +785,201 @@ fn cancel_row(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if theme::pill_button(ui, &palette, "Close", false).clicked() {
+                app.actions.push(Action::CloseDialog);
+            }
+        });
+    });
+}
+
+/// A sticker pack shared in a chat: its stickers, and a button to add it.
+fn sticker_pack(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let locale = app.locale;
+    let Some((pack, publisher)) = app.sticker_preview.clone() else {
+        title(ui, app, &crate::i18n::gettext(locale, "Sticker pack"));
+        ui.horizontal(|ui| {
+            theme::spinner(ui, 16.0, palette.accent);
+            theme::text(
+                ui,
+                crate::i18n::gettext(locale, "Downloading the pack…"),
+                theme::regular(13.0),
+                palette.secondary,
+            );
+        });
+        cancel_row(app, ui);
+        return;
+    };
+    title(ui, app, &pack.name);
+    if !publisher.trim().is_empty() {
+        theme::text(ui, &publisher, theme::regular(13.0), palette.secondary);
+    }
+    egui::ScrollArea::vertical()
+        .max_height(320.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            super::picker::sticker_preview_grid(ui, &palette, &pack.stickers, app.window_focused);
+        });
+    ui.add_space(10.0);
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if theme::pill_button(
+                ui,
+                &palette,
+                &crate::i18n::gettext(locale, "Add to my stickers"),
+                true,
+            )
+            .clicked()
+            {
+                app.actions.push(Action::AddStickerPack);
+            }
+            if theme::pill_button(ui, &palette, &crate::i18n::gettext(locale, "Close"), false)
+                .clicked()
+            {
+                app.actions.push(Action::CloseDialog);
+            }
+        });
+    });
+}
+
+/// Height of the sticker maker's picture area.
+const MAKER_VIEW: f32 = 300.0;
+
+/// Crops a chosen picture into a sticker: drag the square to move it, use the
+/// slider to size it, and tag it with emojis before adding or sending it.
+fn sticker_maker(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let locale = app.locale;
+    title(ui, app, &crate::i18n::gettext(locale, "Make a sticker"));
+    let Some(mut draft) = app.sticker_draft.clone() else {
+        cancel_row(app, ui);
+        return;
+    };
+    let (area, response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), MAKER_VIEW), Sense::drag());
+    let scale = (area.width() / draft.width as f32).min(area.height() / draft.height as f32);
+    let picture = egui::Rect::from_center_size(
+        area.center(),
+        vec2(draft.width as f32 * scale, draft.height as f32 * scale),
+    );
+    if response.dragged() && scale > 0.0 {
+        let delta = response.drag_delta() / scale;
+        draft.crop = draft.crop.moved(
+            delta.x.round() as i64,
+            delta.y.round() as i64,
+            draft.width,
+            draft.height,
+        );
+    }
+    if ui.is_rect_visible(area) {
+        ui.painter()
+            .rect_filled(area, CornerRadius::same(theme::RADIUS), palette.surface);
+        super::widgets::file_image(ui, &draft.source)
+            .fit_to_exact_size(picture.size())
+            .paint_at(ui, picture);
+        let crop = egui::Rect::from_min_size(
+            picture.min + vec2(draft.crop.x as f32, draft.crop.y as f32) * scale,
+            egui::Vec2::splat(draft.crop.side as f32 * scale),
+        );
+        // Dim what the sticker leaves out.
+        let shade = palette.shadow.gamma_multiply(1.6);
+        for outside in [
+            egui::Rect::from_min_max(picture.min, pos2(picture.max.x, crop.min.y)),
+            egui::Rect::from_min_max(pos2(picture.min.x, crop.max.y), picture.max),
+            egui::Rect::from_min_max(
+                pos2(picture.min.x, crop.min.y),
+                pos2(crop.min.x, crop.max.y),
+            ),
+            egui::Rect::from_min_max(
+                pos2(crop.max.x, crop.min.y),
+                pos2(picture.max.x, crop.max.y),
+            ),
+        ] {
+            if outside.is_positive() {
+                ui.painter().rect_filled(outside, 0.0, shade);
+            }
+        }
+        ui.painter().rect_stroke(
+            crop,
+            0.0,
+            Stroke::new(2.0, egui::Color32::WHITE),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let response = response.on_hover_cursor(egui::CursorIcon::Grab);
+    let _ = response;
+    let largest = draft.width.min(draft.height).max(1);
+    let smallest = (largest / 8).max(1);
+    let mut side = draft.crop.side;
+    ui.horizontal(|ui| {
+        theme::text(
+            ui,
+            crate::i18n::gettext(locale, "Size"),
+            theme::regular(13.0),
+            palette.secondary,
+        );
+        ui.spacing_mut().slider_width = ui.available_width() - 8.0;
+        ui.add(egui::Slider::new(&mut side, smallest..=largest).show_value(false));
+    });
+    if side != draft.crop.side {
+        draft.crop = draft.crop.resized(side, draft.width, draft.height);
+    }
+    if draft.transparent {
+        ui.horizontal(|ui| {
+            super::widgets::switch(ui, &palette, &mut draft.keep_transparent);
+            theme::text(
+                ui,
+                crate::i18n::gettext(locale, "Keep the transparent background"),
+                theme::regular(13.0),
+                palette.text,
+            );
+        });
+    }
+    Frame::new()
+        .fill(palette.surface)
+        .corner_radius(CornerRadius::same(theme::RADIUS))
+        .inner_margin(Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut draft.emojis)
+                    .id(egui::Id::new("sticker-maker-emojis"))
+                    .hint_text(
+                        egui::RichText::new(crate::i18n::gettext(
+                            locale,
+                            "Emojis that describe it, like 😂 or ❤️",
+                        ))
+                        .color(palette.dim)
+                        .font(theme::regular(13.0)),
+                    )
+                    .font(theme::regular(13.0))
+                    .text_color(palette.text)
+                    .frame(Frame::NONE)
+                    .desired_width(f32::INFINITY),
+            );
+        });
+    app.sticker_draft = Some(draft);
+    ui.add_space(10.0);
+    let can_send = app.open_chat.is_some();
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if can_send
+                && theme::pill_button(ui, &palette, &crate::i18n::gettext(locale, "Send"), true)
+                    .clicked()
+            {
+                app.actions.push(Action::MakeSticker { send: true });
+            }
+            if theme::pill_button(
+                ui,
+                &palette,
+                &crate::i18n::gettext(locale, "Add to favorites"),
+                !can_send,
+            )
+            .clicked()
+            {
+                app.actions.push(Action::MakeSticker { send: false });
+            }
+            if theme::pill_button(ui, &palette, &crate::i18n::gettext(locale, "Cancel"), false)
+                .clicked()
+            {
                 app.actions.push(Action::CloseDialog);
             }
         });

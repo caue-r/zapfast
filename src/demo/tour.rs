@@ -1,6 +1,6 @@
 //! A repeatable tour driven through the real pointer and keyboard handlers.
 
-mod media;
+pub(super) mod media;
 mod session;
 
 use crate::{
@@ -404,7 +404,9 @@ impl Tour {
             Target::Gif => ctx
                 .read_response(egui::Id::new("gif-search"))
                 .map(|r| r.rect.left_bottom() + vec2(60.0, 55.0)),
-            Target::Sticker => self.labels.get("Saved").map(|pos| *pos + vec2(25.0, 52.0)),
+            Target::Sticker => ctx
+                .data(|d| d.get_temp::<Rect>(crate::ui::picker::first_tile_id()))
+                .map(|rect| rect.center()),
         }
     }
 

@@ -425,6 +425,8 @@ pub enum Icon {
     Smartphone,
     Smile,
     SquarePen,
+    Star,
+    StarOff,
     Sticker,
     Sun,
     Trash,
@@ -498,6 +500,8 @@ const ICONS: &[(Icon, &str, &[u8])] = icons! {
     Smartphone => "smartphone",
     Smile => "smile",
     SquarePen => "square-pen",
+    Star => "star",
+    StarOff => "star-off",
     Sticker => "sticker",
     Sun => "sun",
     Trash => "trash-2",
@@ -531,7 +535,7 @@ impl Icon {
 /// is uploaded. An icon drawn at more than one size loses that texture when
 /// egui prunes the extra size variants, and with the bytes gone the next draw
 /// finds neither and paints egui's red "failed" placeholder. A loader whose
-/// `forget` does nothing keeps them: the icons are 69 small SVGs, so holding
+/// `forget` does nothing keeps them: the icons are 71 small SVGs, so holding
 /// them costs nothing next to a single photo.
 struct IconBytes;
 

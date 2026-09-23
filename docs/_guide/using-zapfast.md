@@ -25,21 +25,48 @@ on its text still selects the word.
 
 ## Stickers
 
-Right-click a sticker in a chat or the picker to save it. Saved stickers
-appear in the **Saved** row. To import a pack, click **Find packs**, copy a
-`signal.art` link from [signalstickers.org](https://signalstickers.org), and
-paste it into the field. You can also open a `.wastickers` file. Animated
-stickers remain animated and play on hover. Use the delete button beside a
-pack to remove it. Packs are stored as WebP files on your computer.
+The sticker tab works like WhatsApp's: a row of tabs holds **Recent**
+(the clock), **Favorites** (the star), each of your packs, and **+** for
+adding more. Click a sticker to send it. Animated stickers play on hover.
 
-You can also make packs of your own. Type a name in **New pack…** beside the
-grid and press Enter (or click **+**). Pick a pack in that sidebar to show only
-its stickers, and **All** to see everything again. Right-click any sticker and
-choose one of your packs in the menu to add it; a check mark shows the packs it
-is already in, and choosing a checked one takes it back out. A pack keeps its
-own copy of each sticker, named by the sticker's content, so the same picture
-is added once however many chats it came from. The **×** beside a pack deletes
-it and its copies, and leaves your saved stickers and other packs alone.
+**Recent** holds the stickers you sent, not the ones you received.
+Right-click one to take it out of Recent here and on your phone.
+
+Right-click a sticker in a chat or the picker to add it to your
+**Favorites**. Favorites stay in sync with your phone: a sticker you favorite
+or unfavorite on either side follows on the other.
+
+Type in the search field to find stickers by emoji (😂), by a word that names
+an emoji ("laugh", "duck"), or by pack name. Stickers carry the emojis they
+express in their metadata, as WhatsApp's own stickers do.
+
+Under **+**, paste a `signal.art` link from
+[signalstickers.org](https://signalstickers.org) (or click **Find packs**), or
+open a `.wastickers` file, to import a pack. Signal packs keep each sticker's
+emoji. Open a pack's tab and use its delete button to remove it. Packs are
+stored as WebP files on your computer.
+
+A WhatsApp sticker pack someone shares in a chat shows its name, publisher,
+and size. Click **View stickers** to download and look at it, and **Add to my
+stickers** to keep it as a pack here. To share one of your packs, open its tab
+and click the send arrow beside its name: it goes to the open chat as a
+WhatsApp sticker pack of up to 60 stickers, with each sticker's emojis.
+
+You can also make packs of your own: type a name under **Make your own** and
+click **Create pack**. Right-click any sticker and choose one of your packs in
+the menu to add it; a check mark shows the packs it is already in, and
+choosing a checked one takes it back out. A pack keeps its own copy of each
+sticker, named by the sticker's content, so the same picture is added once
+however many chats it came from. Deleting a pack removes its copies and leaves
+your favorites and other packs alone.
+
+To make a sticker from a picture, click **Make a sticker from a picture…**
+under **+** and choose a PNG, JPEG, WebP, or GIF. Drag the square to choose
+the part you want and use **Size** to resize it. A picture with a transparent
+background keeps it unless you turn that off, and then the background becomes
+white. Type the emojis that describe it, for search here and for WhatsApp's
+sticker suggestions, then **Send** it to the open chat or **Add to favorites**.
+The sticker is a 512 × 512 WebP under WhatsApp's 100 KB limit.
 
 ## Attachments
 

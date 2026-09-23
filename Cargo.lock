@@ -7476,6 +7476,7 @@ dependencies = [
  "keyring-core",
  "ksni",
  "libc",
+ "libwebp-sys2 0.2.0",
  "log",
  "memmap2",
  "mime_guess2",

@@ -11,7 +11,7 @@ use egui::{
 
 use crate::app::App;
 use crate::i18n::gettext;
-use crate::model::{Action, PickerTab, StickerPack};
+use crate::model::{Action, PickerTab, StickerPack, StickerShelf};
 use crate::theme::{self, Icon, Palette};
 
 use super::conversation;
@@ -23,10 +23,6 @@ const HEIGHT: f32 = 400.0;
 const FRAME_MARGIN: i8 = 10;
 /// Minimum emoji cell width. Columns expand to fill the grid.
 const CELL: f32 = 40.0;
-/// Width of the local-pack sidebar inside the sticker tab.
-const GROUP_PANEL: f32 = 150.0;
-/// Height of one row in the local-pack sidebar.
-const GROUP_ROW: f32 = 30.0;
 
 /// An emoji-grid heading or row.
 enum Row {
@@ -1055,324 +1051,279 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
 
 // --- stickers -----------------------------------------------------------
 
+/// Side of one tab in the sticker tab strip.
+const SHELF_TAB: f32 = 34.0;
+
 /// What a click or the right-click menu asked of a sticker tile.
 #[derive(Default)]
 struct StickerChoices {
-    send: Option<std::path::PathBuf>,
-    save: Option<std::path::PathBuf>,
-    forget: Option<std::path::PathBuf>,
+    send: Option<PathBuf>,
+    save: Option<PathBuf>,
+    forget: Option<PathBuf>,
+    /// Taking a sticker out of Recent.
+    unrecent: Option<PathBuf>,
     /// Filing a sticker into a local pack, or taking it out of one.
     pack: Option<(PathBuf, PathBuf, bool)>,
 }
 
-/// Sidebar entries: everything first, then the local packs, newest first.
-fn pack_entries(packs: &[StickerPack], all: &str) -> Vec<(Option<PathBuf>, String)> {
-    std::iter::once((None, all.to_owned()))
-        .chain(
-            packs
-                .iter()
-                .filter(|pack| pack.local)
-                .map(|pack| (Some(pack.dir.clone()), pack.name.clone())),
-        )
-        .collect()
-}
-
-/// What a click on a pack row asked for.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum GroupRow {
-    Picked,
-    Removed,
-}
-
-/// Where a pack row was drawn, so interaction tests can click it.
-pub fn group_row_id(label: &str) -> egui::Id {
-    egui::Id::new(("sticker-pack-row", label))
-}
-
-/// One row of the pack list: the name on the left, a delete cross on the
-/// right. Rows span the panel so long names have room, and the name goes
-/// through the rich-text path because a pack name can hold emoji.
-fn group_row(
-    ui: &mut egui::Ui,
-    palette: &Palette,
-    label: &str,
-    selected: bool,
-    removable: bool,
-) -> Option<GroupRow> {
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), GROUP_ROW), Sense::click());
-    let cross = egui::Rect::from_center_size(
-        egui::pos2(rect.right() - 13.0, rect.center().y),
-        egui::Vec2::splat(16.0),
+/// The tab strip, as in WhatsApp: Recent, Favorites, every pack, then the
+/// page for adding stickers.
+fn shelf_entries(packs: &[StickerPack]) -> Vec<StickerShelf> {
+    let mut shelves = vec![StickerShelf::Recent, StickerShelf::Favorites];
+    shelves.extend(
+        packs
+            .iter()
+            .map(|pack| StickerShelf::Pack(pack.dir.clone())),
     );
-    let remove = removable.then(|| {
-        ui.interact(cross, response.id.with("delete"), Sense::click())
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-    });
-    let remove_hovered = remove.as_ref().is_some_and(|remove| remove.hovered());
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(group_row_id(label), rect));
-    if ui.is_rect_visible(rect) {
-        let fill = if selected {
-            palette.surface_active
-        } else if response.hovered() || remove_hovered {
-            palette.surface_hover
-        } else {
-            palette.surface
-        };
-        ui.painter()
-            .rect_filled(rect, CornerRadius::same(theme::RADIUS), fill);
-        let right = if removable {
-            cross.left() - 4.0
-        } else {
-            rect.right() - 10.0
-        };
-        let left = rect.left() + 10.0;
-        let line = widgets::line(
-            ui,
-            label,
-            theme::regular(13.0),
-            palette.text,
-            (right - left).max(1.0),
-            1,
-        );
-        line.paint(
-            ui,
-            egui::pos2(left, rect.center().y - line.size().y / 2.0),
-            palette.text,
-        );
-        if removable {
-            theme::paint_icon(
-                ui,
-                Icon::X,
-                cross,
-                12.0,
-                if remove_hovered {
-                    palette.danger
-                } else {
-                    palette.dim
-                },
-            );
-        }
-    }
-    if remove.is_some_and(|remove| remove.clicked()) {
-        return Some(GroupRow::Removed);
-    }
-    response.clicked().then_some(GroupRow::Picked)
+    shelves.push(StickerShelf::Add);
+    shelves
 }
 
-/// Local-pack sidebar: create a pack, pick one, or delete one.
-fn packs_panel(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
-    let entries = pack_entries(&app.sticker_packs, &gettext(app.locale, "All"));
-    let active = app.sticker_pack.clone();
-    let mut pick = None;
-    let mut remove = None;
-    let mut create = false;
-    Frame::new()
-        .fill(palette.panel)
-        .corner_radius(CornerRadius::same(theme::RADIUS))
-        .inner_margin(Margin::symmetric(10, 10))
+/// Where a shelf's tab was drawn, so interaction tests and the tour can click it.
+pub fn shelf_tab_id(shelf: &StickerShelf) -> egui::Id {
+    egui::Id::new(("sticker-shelf-tab", shelf))
+}
+
+/// The row of tabs under the search field. Packs show their first sticker.
+fn shelf_strip(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
+    let current = app.sticker_shelf.clone();
+    let locale = app.locale;
+    let shelves = shelf_entries(&app.sticker_packs);
+    let mut picked = None;
+    egui::ScrollArea::horizontal()
+        .id_salt("sticker-shelves")
+        .auto_shrink([false, true])
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.set_min_height(ui.available_height());
-            theme::text(
-                ui,
-                gettext(app.locale, "My packs"),
-                theme::semibold(13.0),
-                palette.secondary,
-            );
-            ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if theme::icon_button(
-                    ui,
-                    Icon::Plus,
-                    16.0,
-                    palette.accent,
-                    palette.text,
-                    &gettext(app.locale, "Create this pack"),
-                )
-                .clicked()
-                {
-                    create = true;
-                }
-                let field = Frame::new()
-                    .fill(palette.surface)
-                    .corner_radius(CornerRadius::same(theme::RADIUS))
-                    .inner_margin(Margin::symmetric(8, 4))
-                    .show(ui, |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut app.sticker_pack_name)
-                                .id(egui::Id::new("sticker-pack-name"))
-                                .hint_text(
-                                    egui::RichText::new(gettext(app.locale, "New pack…"))
-                                        .color(palette.dim)
-                                        .font(theme::regular(12.5)),
-                                )
-                                .font(theme::regular(12.5))
-                                .text_color(palette.text)
-                                .frame(Frame::NONE)
-                                .desired_width(f32::INFINITY),
-                        )
-                    })
-                    .inner;
-                if field.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)) {
-                    create = true;
-                }
-            });
-            ui.add_space(6.0);
-            ui.spacing_mut().item_spacing.y = 2.0;
-            egui::ScrollArea::vertical()
-                .id_salt("sticker-pack-list")
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    for (name, label) in &entries {
-                        let selected = active.as_deref() == name.as_deref();
-                        match group_row(ui, palette, label, selected, name.is_some()) {
-                            Some(GroupRow::Picked) => pick = Some(name.clone()),
-                            Some(GroupRow::Removed) => {
-                                if let Some(dir) = name {
-                                    remove = Some(dir.clone());
-                                }
-                            }
-                            None => {}
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for shelf in shelves {
+                    let (rect, response) =
+                        ui.allocate_exact_size(Vec2::splat(SHELF_TAB), Sense::click());
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(shelf_tab_id(&shelf), rect));
+                    let pack = match &shelf {
+                        StickerShelf::Pack(dir) => {
+                            app.sticker_packs.iter().find(|pack| pack.dir == *dir)
+                        }
+                        _ => None,
+                    };
+                    let selected = shelf == current;
+                    if ui.is_rect_visible(rect) {
+                        if selected {
+                            ui.painter().rect_filled(
+                                rect.shrink(1.0),
+                                6.0,
+                                palette.accent.gamma_multiply(0.22),
+                            );
+                        } else if response.hovered() {
+                            ui.painter()
+                                .rect_filled(rect.shrink(1.0), 6.0, palette.surface_hover);
+                        }
+                        let icon = match &shelf {
+                            StickerShelf::Recent => Some(Icon::Clock),
+                            StickerShelf::Favorites => Some(Icon::Star),
+                            StickerShelf::Add => Some(Icon::Plus),
+                            StickerShelf::Pack(_) => None,
+                        };
+                        let color = if selected {
+                            palette.text
+                        } else {
+                            palette.secondary
+                        };
+                        match (icon, pack.and_then(|pack| pack.stickers.first())) {
+                            (Some(icon), _) => theme::paint_icon(ui, icon, rect, 17.0, color),
+                            (None, Some(cover)) => sticker_picture(ui, cover, rect.shrink(5.0)),
+                            (None, None) => theme::paint_icon(ui, Icon::Sticker, rect, 17.0, color),
+                        }
+                        if selected {
+                            ui.painter().hline(
+                                rect.x_range().shrink(6.0),
+                                rect.bottom() - 2.0,
+                                Stroke::new(2.0, palette.accent),
+                            );
                         }
                     }
-                });
+                    let tip = match (&shelf, pack) {
+                        (StickerShelf::Recent, _) => gettext(locale, "Recent"),
+                        (StickerShelf::Favorites, _) => gettext(locale, "Favorites"),
+                        (StickerShelf::Add, _) => gettext(locale, "Add stickers"),
+                        (StickerShelf::Pack(_), Some(pack)) => pack.name.clone().into(),
+                        (StickerShelf::Pack(_), None) => "".into(),
+                    };
+                    if response
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(tip.as_ref())
+                        .clicked()
+                    {
+                        picked = Some(shelf);
+                    }
+                }
+            });
         });
-    let name = app.sticker_pack_name.trim().to_owned();
-    if create && !name.is_empty() {
-        app.actions.push(Action::CreateStickerPack(name));
-        app.sticker_pack_name.clear();
-    }
-    if let Some(dir) = pick {
-        app.actions.push(Action::SelectStickerPack(dir));
-    }
-    if let Some(dir) = remove {
-        app.actions.push(Action::DeleteStickerPack(dir));
+    if let Some(shelf) = picked {
+        app.sticker_search.clear();
+        app.actions.push(Action::SelectStickerShelf(shelf));
     }
 }
 
-/// The import row across the top, then the stickers beside the pack list.
-fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
-    import_row(app, ui, palette);
-    ui.add_space(4.0);
-    let gap = 8.0;
-    let (width, height) = (ui.available_width(), ui.available_height());
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        ui.allocate_ui_with_layout(
-            vec2((width - GROUP_PANEL - gap).max(0.0), height),
-            Layout::top_down(Align::Min),
-            |ui| sticker_grids(app, ui, palette),
-        );
-        ui.allocate_ui_with_layout(
-            vec2(GROUP_PANEL, height),
-            Layout::top_down(Align::Min),
-            |ui| packs_panel(app, ui, palette),
-        );
+/// A short centered note in place of an empty grid.
+fn shelf_hint(ui: &mut egui::Ui, palette: &Palette, text: &str) {
+    ui.add_space(24.0);
+    ui.vertical_centered(|ui| {
+        theme::paragraph(ui, text, theme::regular(13.0), palette.secondary);
     });
 }
 
-/// Saved stickers, packs, and Recent; or only the chosen local pack.
-fn sticker_grids(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
-    let selected = app.selected_pack().cloned();
-    if selected.is_none()
-        && app.stickers.is_empty()
-        && app.stickers_saved.is_empty()
-        && app.sticker_packs.is_empty()
-    {
-        ui.add_space(20.0);
-        ui.vertical_centered(|ui| {
-            theme::paragraph(
-                ui,
-                if app.stickers_pending {
-                    gettext(app.locale, "Loading your stickers…")
-                } else {
-                    gettext(app.locale, "Recent stickers appear here. Right-click one to save it. To import a pack, paste a signal.art link or open a .wastickers file.")
-                },
-                theme::regular(13.0),
-                palette.secondary,
-            );
-        });
+fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    search_box(
+        ui,
+        palette,
+        "sticker-search",
+        &mut app.sticker_search,
+        &gettext(locale, "Search by emoji, word, or pack"),
+    );
+    shelf_strip(app, ui, palette);
+    ui.add_space(2.0);
+    let query = app.sticker_search.trim().to_owned();
+    let shelf = app.sticker_shelf.clone();
+    if query.is_empty() && shelf == StickerShelf::Add {
+        add_page(app, ui, palette);
         return;
     }
-    let saved = app.stickers_saved.clone();
-    let packs = app.sticker_packs.clone();
-    let recent = app.stickers.clone();
-    let local: Vec<StickerPack> = packs.iter().filter(|pack| pack.local).cloned().collect();
-    let animate = app.window_focused;
-    let locale = app.locale;
+    let local: Vec<StickerPack> = app
+        .sticker_packs
+        .iter()
+        .filter(|pack| pack.local)
+        .cloned()
+        .collect();
+    let grid = GridContext {
+        locale,
+        animate: app.window_focused,
+        local: &local,
+    };
     let mut choices = StickerChoices::default();
     let mut delete_pack = None;
-    egui::ScrollArea::vertical()
-        .id_salt("sticker-grid")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            let grid = GridContext {
-                locale,
-                animate,
-                local: &local,
-            };
-            // A chosen pack replaces every section with its own grid.
-            if let Some(pack) = &selected {
-                theme::text(ui, &pack.name, theme::semibold(12.5), palette.secondary);
-                if pack.stickers.is_empty() {
-                    ui.add_space(6.0);
-                    theme::paragraph(
-                        ui,
-                        gettext(
-                            locale,
-                            "Nothing here yet. Right-click any sticker to add it to this pack.",
-                        ),
-                        theme::regular(13.0),
-                        palette.secondary,
-                    );
+    let mut share_pack = None;
+    if !query.is_empty() {
+        let found = crate::sticker_search::search(
+            &crate::sticker_search::Library {
+                recent: &app.stickers,
+                favorites: &app.stickers_saved,
+                packs: &app.sticker_packs,
+                emojis: &app.sticker_emojis,
+            },
+            &query,
+        );
+        if found.is_empty() {
+            shelf_hint(
+                ui,
+                palette,
+                &gettext(locale, "No stickers match your search."),
+            );
+        } else {
+            egui::ScrollArea::vertical()
+                .id_salt("sticker-results")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    sticker_grid(ui, palette, &found, Shelf::Pack, &grid, &mut choices);
+                });
+        }
+    } else {
+        match &shelf {
+            StickerShelf::Recent if app.stickers.is_empty() => {
+                let text = if app.stickers_pending {
+                    gettext(locale, "Loading your stickers…")
                 } else {
-                    sticker_grid(ui, palette, &pack.stickers, false, &grid, &mut choices);
-                }
-                return;
+                    gettext(locale, "Stickers you send appear here.")
+                };
+                shelf_hint(ui, palette, &text);
             }
-            if !saved.is_empty() {
-                theme::text(
-                    ui,
-                    gettext(locale, "Saved"),
-                    theme::semibold(12.5),
-                    palette.secondary,
-                );
-                sticker_grid(ui, palette, &saved, true, &grid, &mut choices);
-                ui.add_space(8.0);
-            }
-            for pack in &packs {
+            StickerShelf::Favorites if app.stickers_saved.is_empty() => shelf_hint(
+                ui,
+                palette,
+                &gettext(
+                    locale,
+                    "Right-click any sticker to add it to your favorites. They stay in sync with your phone.",
+                ),
+            ),
+            StickerShelf::Pack(_) => {
+                let Some(pack) = app.selected_pack().cloned() else {
+                    return;
+                };
                 ui.horizontal(|ui| {
-                    theme::text(ui, &pack.name, theme::semibold(12.5), palette.secondary);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if theme::icon_button(
+                    theme::text(ui, &pack.name, theme::semibold(13.0), palette.text);
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let remove = theme::icon_button(
                             ui,
                             Icon::Trash,
-                            14.0,
+                            15.0,
                             palette.dim,
                             palette.danger,
                             &gettext(locale, "Remove this pack"),
-                        )
-                        .clicked()
-                        {
+                        );
+                        ui.ctx()
+                            .data_mut(|data| data.insert_temp(remove_pack_id(), remove.rect));
+                        if remove.clicked() {
                             delete_pack = Some(pack.dir.clone());
+                        }
+                        if !pack.stickers.is_empty()
+                            && theme::icon_button(
+                                ui,
+                                Icon::Forward,
+                                15.0,
+                                palette.dim,
+                                palette.text,
+                                &gettext(locale, "Send this pack to the chat"),
+                            )
+                            .clicked()
+                        {
+                            share_pack = Some(pack.dir.clone());
                         }
                     });
                 });
-                sticker_grid(ui, palette, &pack.stickers, false, &grid, &mut choices);
-                ui.add_space(8.0);
+                if pack.stickers.is_empty() {
+                    shelf_hint(
+                        ui,
+                        palette,
+                        &gettext(
+                            locale,
+                            "Nothing here yet. Right-click any sticker to add it to this pack.",
+                        ),
+                    );
+                } else {
+                    egui::ScrollArea::vertical()
+                        .id_salt(("sticker-pack", &pack.dir))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            sticker_grid(
+                                ui,
+                                palette,
+                                &pack.stickers,
+                                Shelf::Pack,
+                                &grid,
+                                &mut choices,
+                            );
+                        });
+                }
             }
-            if !recent.is_empty() {
-                theme::text(
-                    ui,
-                    gettext(locale, "Recent"),
-                    theme::semibold(12.5),
-                    palette.secondary,
-                );
-                sticker_grid(ui, palette, &recent, false, &grid, &mut choices);
+            StickerShelf::Recent | StickerShelf::Favorites => {
+                let (stickers, kind) = if shelf == StickerShelf::Recent {
+                    (&app.stickers, Shelf::Recent)
+                } else {
+                    (&app.stickers_saved, Shelf::Favorites)
+                };
+                egui::ScrollArea::vertical()
+                    .id_salt(("sticker-shelf", &shelf))
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        sticker_grid(ui, palette, stickers, kind, &grid, &mut choices);
+                    });
             }
-        });
+            StickerShelf::Add => {}
+        }
+    }
     if let Some(path) = choices.send {
         app.actions.push(Action::SendSticker(path));
     }
@@ -1381,6 +1332,9 @@ fn sticker_grids(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
     }
     if let Some(path) = choices.forget {
         app.actions.push(Action::ForgetSticker(path));
+    }
+    if let Some(path) = choices.unrecent {
+        app.actions.push(Action::RemoveRecentSticker(path));
     }
     if let Some((pack, sticker, member)) = choices.pack {
         app.actions.push(Action::SetStickerPack {
@@ -1392,14 +1346,125 @@ fn sticker_grids(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
     if let Some(dir) = delete_pack {
         app.actions.push(Action::DeleteStickerPack(dir));
     }
+    if let Some(dir) = share_pack {
+        app.actions.push(Action::ShareStickerPack(dir));
+    }
+}
+
+/// The page behind the strip's plus: import packs, start a pack, or make a
+/// sticker from a picture.
+fn add_page(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    egui::ScrollArea::vertical()
+        .id_salt("sticker-add")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.add_space(4.0);
+            theme::text(
+                ui,
+                gettext(locale, "Import a pack"),
+                theme::semibold(13.0),
+                palette.text,
+            );
+            theme::paragraph(
+                ui,
+                gettext(
+                    locale,
+                    "Paste a signal.art link from signalstickers.org, or open a .wastickers file.",
+                ),
+                theme::regular(12.5),
+                palette.secondary,
+            );
+            ui.add_space(4.0);
+            import_row(app, ui, palette);
+            ui.add_space(14.0);
+            theme::text(
+                ui,
+                gettext(locale, "Make your own"),
+                theme::semibold(13.0),
+                palette.text,
+            );
+            theme::paragraph(
+                ui,
+                gettext(
+                    locale,
+                    "Start a pack, then right-click any sticker to add it. Or turn a picture into a sticker.",
+                ),
+                theme::regular(12.5),
+                palette.secondary,
+            );
+            ui.add_space(4.0);
+            new_pack_row(app, ui, palette);
+            ui.add_space(6.0);
+            if theme::soft_button(
+                ui,
+                palette,
+                Some(Icon::Image),
+                &gettext(locale, "Make a sticker from a picture…"),
+                false,
+            )
+            .clicked()
+            {
+                app.actions.push(Action::PickStickerPicture);
+            }
+        });
+}
+
+/// Names and creates a local pack.
+fn new_pack_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    let mut create = false;
+    ui.horizontal(|ui| {
+        let label = gettext(locale, "Create pack");
+        let button = theme::soft_button_width(ui, &label, true);
+        let field = Frame::new()
+            .fill(palette.surface)
+            .corner_radius(CornerRadius::same(theme::RADIUS))
+            .inner_margin(Margin::symmetric(10, 6))
+            .show(ui, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.sticker_pack_name)
+                        .id(egui::Id::new("sticker-pack-name"))
+                        .hint_text(
+                            egui::RichText::new(gettext(locale, "New pack…"))
+                                .color(palette.dim)
+                                .font(theme::regular(13.0)),
+                        )
+                        .font(theme::regular(13.0))
+                        .text_color(palette.text)
+                        .frame(Frame::NONE)
+                        .desired_width(ui.available_width() - button - 26.0),
+                )
+            });
+        theme::focus_outline(
+            ui,
+            field.inner.id,
+            field.response.rect,
+            f32::from(theme::RADIUS),
+        );
+        if field.inner.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)) {
+            create = true;
+        }
+        if theme::soft_button(ui, palette, Some(Icon::Plus), &label, false).clicked() {
+            create = true;
+        }
+    });
+    let name = app.sticker_pack_name.trim().to_owned();
+    if create && !name.is_empty() {
+        app.actions.push(Action::CreateStickerPack(name));
+        app.sticker_pack_name.clear();
+    }
 }
 
 /// Imports packs from pasted signal.art links or .wastickers files.
 fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    let find = gettext(locale, "Find packs");
+    let open = gettext(locale, "Open file");
     ui.horizontal(|ui| {
         let spacing = ui.spacing().item_spacing.x;
-        let buttons = theme::soft_button_width(ui, "Find packs", true)
-            + theme::soft_button_width(ui, "Open file", true)
+        let buttons = theme::soft_button_width(ui, &find, true)
+            + theme::soft_button_width(ui, &open, true)
             + spacing * 2.0;
         let field = Frame::new()
             .fill(palette.surface)
@@ -1410,7 +1475,7 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                     egui::TextEdit::singleline(&mut app.sticker_link)
                         .id(egui::Id::new("sticker-link"))
                         .hint_text(
-                            egui::RichText::new("Paste a signal.art link")
+                            egui::RichText::new(gettext(locale, "Paste a signal.art link"))
                                 .color(palette.dim)
                                 .font(theme::regular(13.0)),
                         )
@@ -1437,14 +1502,14 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                 .push(Action::ImportStickerUrl(app.sticker_link.trim().to_owned()));
         }
         // Open the gallery where users can copy signal.art pack links.
-        if theme::soft_button(ui, palette, Some(Icon::ExternalLink), "Find packs", false)
-            .on_hover_text("Browse signalstickers.org")
+        if theme::soft_button(ui, palette, Some(Icon::ExternalLink), &find, false)
+            .on_hover_text(gettext(locale, "Browse signalstickers.org").as_ref())
             .clicked()
         {
             app.actions
                 .push(Action::OpenUrl("https://signalstickers.org/".to_owned()));
         }
-        if theme::soft_button(ui, palette, Some(Icon::FileText), "Open file", false).clicked() {
+        if theme::soft_button(ui, palette, Some(Icon::FileText), &open, false).clicked() {
             app.actions.push(Action::PickStickerArchive);
         }
     });
@@ -1454,12 +1519,31 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             theme::spinner(ui, 14.0, palette.accent);
             theme::text(
                 ui,
-                "Importing the pack…",
+                gettext(locale, "Importing the pack…"),
                 theme::regular(12.5),
                 palette.secondary,
             );
         });
     }
+}
+
+/// Which list a sticker grid shows, which decides its right-click menu.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Shelf {
+    Recent,
+    Favorites,
+    Pack,
+}
+
+/// Where the pack header's remove button was drawn, for interaction tests.
+fn remove_pack_id() -> egui::Id {
+    egui::Id::new("remove-pack-button")
+}
+
+/// Where the first tile of the last grid was drawn, so interaction tests and
+/// the demo tour can click it.
+pub fn first_tile_id() -> egui::Id {
+    egui::Id::new("first-sticker-tile")
 }
 
 /// What every sticker grid in the tab shares.
@@ -1477,73 +1561,49 @@ fn sticker_grid(
     ui: &mut egui::Ui,
     palette: &Palette,
     stickers: &[PathBuf],
-    saved: bool,
+    shelf: Shelf,
     grid: &GridContext<'_>,
     choices: &mut StickerChoices,
 ) {
     let animate = grid.animate;
-    let remove_label = gettext(grid.locale, "Remove from saved");
-    let save_label = gettext(grid.locale, "Save sticker");
+    let remove_label = gettext(grid.locale, "Remove from favorites");
+    let save_label = gettext(grid.locale, "Add to favorites");
+    let unrecent_label = gettext(grid.locale, "Remove from recents");
     let columns = 5;
     let gap = 6.0;
     let cell = (ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32;
     ui.spacing_mut().item_spacing = vec2(gap, gap);
-    let mut labels = vec![remove_label.as_ref(), save_label.as_ref()];
+    let mut labels = vec![
+        remove_label.as_ref(),
+        save_label.as_ref(),
+        unrecent_label.as_ref(),
+    ];
     labels.extend(grid.local.iter().map(|pack| pack.name.as_str()));
     let menu_width = widgets::menu_width(ui, &labels, true);
     for row in stickers.chunks(columns) {
         ui.horizontal(|ui| {
             for path in row {
                 let (rect, response) = ui.allocate_exact_size(Vec2::splat(cell), Sense::click());
-                if ui.is_rect_visible(rect) {
-                    if response.hovered() {
-                        ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
-                    }
-                    let shown = rect.shrink(4.0);
-                    // Decode only visible animated stickers. Keep a still
-                    // first frame until the focused pointer hovers the tile.
-                    let animated = moves(ui.ctx(), path);
-                    let played = animated
-                        && match crate::animation::frame(
-                            ui,
-                            path,
-                            rect,
-                            animate && response.hovered(),
-                        ) {
-                            crate::animation::Frame::Ready(texture) => {
-                                let size = texture.size_vec2();
-                                let scale = (shown.width() / size.x).min(shown.height() / size.y);
-                                let fitted = Rect::from_center_size(shown.center(), size * scale);
-                                ui.painter().image(
-                                    texture.id(),
-                                    fitted,
-                                    Rect::from_min_max(egui::Pos2::ZERO, pos2(1.0, 1.0)),
-                                    egui::Color32::WHITE,
-                                );
-                                true
-                            }
-                            _ => false,
-                        };
-                    if !played {
-                        if animated {
-                            ui.painter().rect_filled(shown, 6.0, palette.surface);
-                            theme::paint_icon(ui, Icon::Sticker, shown, 24.0, palette.secondary);
-                        } else {
-                            sticker_picture(ui, path, shown);
-                        }
-                    }
+                if Some(path) == stickers.first() {
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(first_tile_id(), rect));
                 }
+                paint_tile(ui, palette, path, rect, response.hovered(), animate);
                 egui::Popup::context_menu(&response)
                     .width(menu_width)
                     .frame(widgets::menu_frame(palette))
                     .show(|ui| {
-                        if saved {
-                            if widgets::menu_item(ui, palette, Some(Icon::X), &remove_label) {
+                        if shelf == Shelf::Favorites {
+                            if widgets::menu_item(ui, palette, Some(Icon::StarOff), &remove_label) {
                                 choices.forget = Some(path.clone());
                             }
-                        } else if widgets::menu_item(ui, palette, Some(Icon::Sticker), &save_label)
-                        {
+                        } else if widgets::menu_item(ui, palette, Some(Icon::Star), &save_label) {
                             choices.save = Some(path.clone());
+                        }
+                        if shelf == Shelf::Recent
+                            && widgets::menu_item(ui, palette, Some(Icon::X), &unrecent_label)
+                        {
+                            choices.unrecent = Some(path.clone());
                         }
                         if !grid.local.is_empty() {
                             widgets::menu_separator(ui, palette);
@@ -1566,6 +1626,71 @@ fn sticker_grid(
                 {
                     choices.send = Some(path.clone());
                 }
+            }
+        });
+    }
+}
+
+/// Draws one sticker tile. Only visible animated stickers decode, and they
+/// keep a still first frame until the focused pointer hovers the tile.
+fn paint_tile(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    path: &Path,
+    rect: Rect,
+    hovered: bool,
+    animate: bool,
+) {
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    if hovered {
+        ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
+    }
+    let shown = rect.shrink(4.0);
+    let animated = moves(ui.ctx(), path);
+    let played = animated
+        && match crate::animation::frame(ui, path, rect, animate && hovered) {
+            crate::animation::Frame::Ready(texture) => {
+                let size = texture.size_vec2();
+                let scale = (shown.width() / size.x).min(shown.height() / size.y);
+                let fitted = Rect::from_center_size(shown.center(), size * scale);
+                ui.painter().image(
+                    texture.id(),
+                    fitted,
+                    Rect::from_min_max(egui::Pos2::ZERO, pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+                true
+            }
+            _ => false,
+        };
+    if !played {
+        if animated {
+            ui.painter().rect_filled(shown, 6.0, palette.surface);
+            theme::paint_icon(ui, Icon::Sticker, shown, 24.0, palette.secondary);
+        } else {
+            sticker_picture(ui, path, shown);
+        }
+    }
+}
+
+/// Sticker tiles to look at, as in a shared pack before adding it.
+pub fn sticker_preview_grid(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    stickers: &[PathBuf],
+    animate: bool,
+) {
+    let columns = 5;
+    let gap = 6.0;
+    let cell = (ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32;
+    ui.spacing_mut().item_spacing = vec2(gap, gap);
+    for row in stickers.chunks(columns) {
+        ui.horizontal(|ui| {
+            for path in row {
+                let (rect, response) = ui.allocate_exact_size(Vec2::splat(cell), Sense::hover());
+                paint_tile(ui, palette, path, rect, response.hovered(), animate);
             }
         });
     }
@@ -1792,25 +1917,17 @@ mod pack_tests {
     }
 
     #[test]
-    fn the_sidebar_lists_everything_first_then_the_local_packs() {
-        let packs = vec![
-            pack("Bom dia", true),
-            pack("Frogs", false),
-            pack("Futebol", true),
-        ];
+    fn the_strip_holds_recent_favorites_every_pack_then_add() {
+        let packs = vec![pack("Bom dia", true), pack("Frogs", false)];
         assert_eq!(
-            pack_entries(&packs, "All"),
+            shelf_entries(&packs),
             vec![
-                (None, "All".to_owned()),
-                (Some(PathBuf::from("/packs/Bom dia")), "Bom dia".to_owned()),
-                (Some(PathBuf::from("/packs/Futebol")), "Futebol".to_owned()),
-            ],
-            "imported packs cannot take stickers, so they stay out"
-        );
-        assert_eq!(
-            pack_entries(&[], "All"),
-            vec![(None, "All".to_owned())],
-            "with no packs the sidebar still offers everything"
+                StickerShelf::Recent,
+                StickerShelf::Favorites,
+                StickerShelf::Pack(PathBuf::from("/packs/Bom dia")),
+                StickerShelf::Pack(PathBuf::from("/packs/Frogs")),
+                StickerShelf::Add,
+            ]
         );
     }
 
@@ -1851,81 +1968,76 @@ mod pack_tests {
         ]
     }
 
+    /// Draws one frame of the sticker tab.
+    fn frame(app: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let palette = app.palette;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 420.0));
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            },
+            |ui| sticker_tab(app, ui, &palette),
+        );
+        output.textures_delta.clear();
+    }
+
     #[test]
-    fn a_row_picks_its_pack_and_its_cross_removes_it() {
+    fn a_tab_opens_its_pack_and_the_pack_can_be_removed() {
         let directory = tempfile::tempdir().expect("creates a temporary directory");
         let (mut app, _events) = App::headless(
             crate::paths::AppDirs::under(directory.path()),
             crate::settings::Settings::default(),
         );
         app.sticker_packs = vec![pack("Bom dia", true), pack("Futebol", true)];
-        let palette = app.palette;
         let ctx = egui::Context::default();
         app.attach(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(420.0, 420.0));
-        // Draw one frame of the pack sidebar.
-        fn frame(
-            app: &mut App,
-            ctx: &egui::Context,
-            palette: &Palette,
-            screen: egui::Rect,
-            events: Vec<egui::Event>,
-        ) {
-            let mut output = ctx.run_ui(
-                egui::RawInput {
-                    screen_rect: Some(screen),
-                    events,
-                    ..Default::default()
-                },
-                |ui| packs_panel(app, ui, palette),
-            );
-            output.textures_delta.clear();
-        }
-
-        frame(&mut app, &ctx, &palette, screen, Vec::new());
-        let row = ctx
-            .data(|data| data.get_temp::<egui::Rect>(group_row_id("Futebol")))
-            .expect("the sidebar draws a row per pack");
+        frame(&mut app, &ctx, Vec::new());
+        let futebol = StickerShelf::Pack(PathBuf::from("/packs/Futebol"));
+        let tab = ctx
+            .data(|data| data.get_temp::<egui::Rect>(shelf_tab_id(&futebol)))
+            .expect("the strip draws a tab per pack");
+        frame(&mut app, &ctx, click(tab.center()));
         assert!(
-            row.width() > 110.0,
-            "a pack row spans the sidebar: {}",
-            row.width()
+            app.actions
+                .contains(&Action::SelectStickerShelf(futebol.clone())),
+            "clicking the tab opens the pack"
         );
-
-        // The cross removes the pack without also picking it.
-        frame(
-            &mut app,
-            &ctx,
-            &palette,
-            screen,
-            click(egui::pos2(row.right() - 13.0, row.center().y)),
-        );
+        app.actions.clear();
+        app.sticker_shelf = futebol;
+        frame(&mut app, &ctx, Vec::new());
+        // The pack's header offers its removal.
+        let trash = ctx
+            .data(|data| data.get_temp::<egui::Rect>(remove_pack_id()))
+            .expect("the header draws a remove button");
+        frame(&mut app, &ctx, click(trash.center()));
         assert!(
             app.actions
                 .contains(&Action::DeleteStickerPack(PathBuf::from("/packs/Futebol"))),
-            "the cross deletes the pack"
+            "the trash button removes the pack"
         );
-        assert!(
-            !app.actions
-                .iter()
-                .any(|action| matches!(action, Action::SelectStickerPack(_))),
-            "deleting must not also select the pack"
-        );
+    }
 
-        app.actions.clear();
-        frame(
-            &mut app,
-            &ctx,
-            &palette,
-            screen,
-            click(egui::pos2(row.left() + 20.0, row.center().y)),
+    #[test]
+    fn typing_in_search_lists_matching_stickers_instead_of_the_shelf() {
+        let directory = tempfile::tempdir().expect("creates a temporary directory");
+        let (mut app, _events) = App::headless(
+            crate::paths::AppDirs::under(directory.path()),
+            crate::settings::Settings::default(),
         );
-        assert!(
-            app.actions
-                .contains(&Action::SelectStickerPack(Some(PathBuf::from(
-                    "/packs/Futebol"
-                )))),
-            "clicking the row picks the pack"
-        );
+        let sticker = directory.path().join("duck.webp");
+        std::fs::write(&sticker, b"RIFF0000WEBP").expect("writes");
+        app.stickers_saved = vec![sticker.clone()];
+        app.sticker_emojis = [(sticker.clone(), vec!["🦆".to_owned()])].into();
+        app.sticker_search = "duck".into();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        frame(&mut app, &ctx, Vec::new());
+        let tile = ctx
+            .data(|data| data.get_temp::<egui::Rect>(first_tile_id()))
+            .expect("a result is drawn");
+        frame(&mut app, &ctx, click(tile.center()));
+        assert!(app.actions.contains(&Action::SendSticker(sticker)));
     }
 }

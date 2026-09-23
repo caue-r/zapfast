@@ -15,7 +15,9 @@ mod labels;
 pub use labels::{DEFAULT_COLOR, LABEL_LIMIT, NAME_LIMIT};
 mod polls;
 mod receipts;
+mod stickers;
 pub use polls::PollVote;
+pub use stickers::FavoriteSticker;
 
 /// Outcome of deleting or clearing a chat.
 #[derive(Clone, Debug, Default)]
@@ -265,6 +267,7 @@ impl Archive {
         connection.execute_batch(labels::SCHEMA)?;
         connection.execute_batch(polls::SCHEMA)?;
         connection.execute_batch(drafts::SCHEMA)?;
+        connection.execute_batch(stickers::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -953,12 +956,14 @@ impl Archive {
         rows.collect()
     }
 
-    /// Returns downloaded chat stickers for the picker, newest first.
+    /// Returns downloaded stickers we sent, newest first. Received stickers
+    /// stay out of Recent, as in WhatsApp's own apps.
     pub fn recent_stickers(&self, limit: usize) -> Result<Vec<ArchivedSticker>> {
         let mut statement = self.connection.prepare(
             "SELECT json_extract(content, '$.media.path') AS path, MAX(timestamp), raw
              FROM messages
              WHERE json_extract(content, '$.kind') = 'sticker' AND path IS NOT NULL
+               AND from_me = 1
              GROUP BY path
              ORDER BY 2 DESC
              LIMIT ?1",
@@ -976,14 +981,15 @@ impl Archive {
             .collect())
     }
 
-    /// Returns undownloaded sticker messages, outgoing first and newest first.
+    /// Returns undownloaded stickers we sent, newest first, for Recent.
     pub fn stickers_without_file(&self, limit: usize) -> Result<Vec<(String, String)>> {
         let mut statement = self.connection.prepare(
             "SELECT chat, id FROM messages
              WHERE json_extract(content, '$.kind') = 'sticker'
                AND json_extract(content, '$.media.path') IS NULL
                AND raw IS NOT NULL
-             ORDER BY from_me DESC, timestamp DESC
+               AND from_me = 1
+             ORDER BY timestamp DESC
              LIMIT ?1",
         )?;
         let rows = statement.query_map(params![limit as i64], |row| {
@@ -1521,7 +1527,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_labels;",
+            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers;",
         )
     }
 }
@@ -2751,7 +2757,7 @@ mod sticker_tests {
             chat: chat.into(),
             sender: chat.into(),
             sender_name: None,
-            from_me: false,
+            from_me: true,
             timestamp,
             content: Content::Sticker {
                 media: Media {
@@ -2823,6 +2829,41 @@ mod sticker_tests {
         );
         // Exclude missing local files.
         assert!(archive.recent_stickers(10).expect("lists").is_empty());
+    }
+
+    #[test]
+    fn only_stickers_we_sent_are_recent() {
+        let dir = tempfile::tempdir().expect("temp");
+        let file = |name: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, b"webp").expect("writes");
+            path.display().to_string()
+        };
+        let (sent, received) = (file("sent.webp"), file("received.webp"));
+        let archive = Archive::in_memory().expect("opens");
+        archive.ensure_chat("a@s.whatsapp.net", "A").expect("chat");
+        archive
+            .insert_message(&sticker("a@s.whatsapp.net", "s1", 10, Some(&sent)), None)
+            .expect("inserted");
+        let mut theirs = sticker("a@s.whatsapp.net", "s2", 20, Some(&received));
+        theirs.from_me = false;
+        archive.insert_message(&theirs, None).expect("inserted");
+        let mut unfetched = sticker("a@s.whatsapp.net", "s3", 30, None);
+        unfetched.from_me = false;
+        archive
+            .insert_message(&unfetched, Some(b"raw"))
+            .expect("inserted");
+        let recent: Vec<_> = archive
+            .recent_stickers(10)
+            .expect("lists")
+            .into_iter()
+            .map(|sticker| sticker.path.display().to_string())
+            .collect();
+        assert_eq!(recent, vec![sent], "a received sticker is not recent");
+        assert!(
+            archive.stickers_without_file(10).expect("lists").is_empty(),
+            "a received sticker is not fetched for Recent"
+        );
     }
 }
 

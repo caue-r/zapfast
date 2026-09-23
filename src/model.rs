@@ -318,6 +318,15 @@ pub enum Content {
         media: Media,
         animated: bool,
     },
+    /// A WhatsApp sticker pack shared in a chat. Its stickers download when
+    /// someone opens it.
+    #[serde(rename = "sticker_pack")]
+    StickerPack {
+        name: String,
+        publisher: String,
+        count: u32,
+        caption: Option<String>,
+    },
     Location {
         latitude: f64,
         longitude: f64,
@@ -547,6 +556,7 @@ impl Content {
             }
             Self::Document { file_name, .. } => format!("Document: {file_name}"),
             Self::Sticker { .. } => "Sticker".to_owned(),
+            Self::StickerPack { name, .. } => format!("Sticker pack: {name}"),
             Self::Location { name, .. } => match name {
                 Some(name) => format!("Location: {name}"),
                 None => "Location".to_owned(),
@@ -733,6 +743,87 @@ pub enum SidebarDisplayMode {
     Hidden,
 }
 
+/// Which list the sticker tab shows.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum StickerShelf {
+    /// Stickers we sent, and the phone's recent list.
+    #[default]
+    Recent,
+    Favorites,
+    /// One pack, by its folder.
+    Pack(PathBuf),
+    /// Importing packs, starting one, or making a sticker.
+    Add,
+}
+
+/// A square region of a picture, in its pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StickerCrop {
+    pub x: u32,
+    pub y: u32,
+    pub side: u32,
+}
+
+impl StickerCrop {
+    /// The largest square in the middle of the picture.
+    pub fn centered(width: u32, height: u32) -> Self {
+        let side = width.min(height).max(1);
+        Self {
+            x: width.saturating_sub(side) / 2,
+            y: height.saturating_sub(side) / 2,
+            side,
+        }
+    }
+
+    /// The same square kept inside a picture of this size.
+    pub fn clamped(self, width: u32, height: u32) -> Self {
+        let side = self.side.clamp(1, width.min(height).max(1));
+        Self {
+            x: self.x.min(width.saturating_sub(side)),
+            y: self.y.min(height.saturating_sub(side)),
+            side,
+        }
+    }
+
+    /// The square moved by whole pixels, staying inside the picture.
+    pub fn moved(self, dx: i64, dy: i64, width: u32, height: u32) -> Self {
+        let shift = |at: u32, by: i64| (i64::from(at) + by).max(0) as u32;
+        Self {
+            x: shift(self.x, dx),
+            y: shift(self.y, dy),
+            ..self
+        }
+        .clamped(width, height)
+    }
+
+    /// The square resized around its center, staying inside the picture.
+    pub fn resized(self, side: u32, width: u32, height: u32) -> Self {
+        let center = |at: u32| i64::from(at) + i64::from(self.side) / 2;
+        let half = i64::from(side) / 2;
+        Self {
+            x: (center(self.x) - half).max(0) as u32,
+            y: (center(self.y) - half).max(0) as u32,
+            side,
+        }
+        .clamped(width, height)
+    }
+}
+
+/// A picture on its way to becoming a sticker.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StickerDraft {
+    pub source: PathBuf,
+    pub width: u32,
+    pub height: u32,
+    /// The picture has see-through pixels.
+    pub transparent: bool,
+    pub crop: StickerCrop,
+    /// Keep see-through pixels instead of filling them with white.
+    pub keep_transparent: bool,
+    /// Emojis typed for search, WhatsApp's suggestions, or both.
+    pub emojis: String,
+}
+
 /// Sticker pack stored as a folder of WebP files, imported or made here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StickerPack {
@@ -800,6 +891,10 @@ pub enum Dialog {
     JoinGroup,
     /// Confirms setting aside an archive whose key is gone.
     ConfirmStartOver,
+    /// The stickers of a pack shared in a chat, with a button to add it.
+    StickerPack,
+    /// Crops a picture into a sticker.
+    StickerMaker,
     /// Who has received and read one of our messages.
     MessageInfo {
         chat: ChatId,
@@ -1100,6 +1195,8 @@ pub enum Action {
     SaveSticker(PathBuf),
     /// Removes a saved sticker.
     ForgetSticker(PathBuf),
+    /// Takes a sticker out of Recent.
+    RemoveRecentSticker(PathBuf),
     /// Imports a sticker pack from a signal.art link.
     ImportStickerUrl(String),
     /// Selects and imports a .wastickers or zip file.
@@ -1108,8 +1205,21 @@ pub enum Action {
     DeleteStickerPack(PathBuf),
     /// Creates a local sticker pack.
     CreateStickerPack(String),
-    /// Filters the picker by one local pack, or shows everything when `None`.
-    SelectStickerPack(Option<PathBuf>),
+    /// Shows one list in the sticker tab.
+    SelectStickerShelf(StickerShelf),
+    /// Opens a sticker pack shared in the open chat.
+    ViewStickerPack(String),
+    /// Adds the sticker pack being viewed to the packs here.
+    AddStickerPack,
+    /// Sends a pack to the open chat as a WhatsApp sticker pack.
+    ShareStickerPack(PathBuf),
+    /// Chooses a picture for the sticker maker.
+    PickStickerPicture,
+    /// Makes the drafted sticker, then sends it to the open chat or adds it
+    /// to favorites.
+    MakeSticker {
+        send: bool,
+    },
     /// Files a sticker into a local pack, or takes it out of it.
     SetStickerPack {
         pack: PathBuf,
@@ -1270,6 +1380,50 @@ pub enum Action {
 
 #[cfg(test)]
 mod tests {
+    use super::StickerCrop;
+
+    #[test]
+    fn a_sticker_crop_stays_square_and_inside_the_picture() {
+        let crop = StickerCrop::centered(800, 600);
+        assert_eq!(
+            crop,
+            StickerCrop {
+                x: 100,
+                y: 0,
+                side: 600
+            }
+        );
+        // Dragging past an edge stops at it.
+        assert_eq!(
+            crop.moved(-500, 40, 800, 600),
+            StickerCrop {
+                x: 0,
+                y: 0,
+                side: 600
+            }
+        );
+        // Shrinking keeps the center; growing past the picture stops at it.
+        let small = crop.resized(200, 800, 600);
+        assert_eq!(
+            small,
+            StickerCrop {
+                x: 300,
+                y: 200,
+                side: 200
+            }
+        );
+        assert_eq!(
+            small.moved(1000, 1000, 800, 600),
+            StickerCrop {
+                x: 600,
+                y: 400,
+                side: 200
+            }
+        );
+        assert_eq!(small.resized(5000, 800, 600).side, 600);
+        assert_eq!(StickerCrop::centered(0, 0).side, 1);
+    }
+
     use super::*;
 
     #[test]

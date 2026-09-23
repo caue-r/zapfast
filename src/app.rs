@@ -13,7 +13,8 @@ use crate::i18n::Locale;
 use crate::image_preview::PreviewState;
 use crate::model::{
     Action, Chat, ChatFilter, ChatId, Contact, Content, Delivery, Dialog, Gif, GifError, Label,
-    Media, MediaState, Message, Page, PickerTab, SidebarDisplayMode, StickerPack, Toast, ToastKind,
+    Media, MediaState, Message, Page, PickerTab, SidebarDisplayMode, StickerPack, StickerShelf,
+    Toast, ToastKind,
 };
 use crate::paths::AppDirs;
 use crate::settings::{Settings, ThemeChoice};
@@ -290,7 +291,7 @@ pub struct App {
     pub gif_pending: bool,
     pub gif_error: Option<GifError>,
     pub stickers: Vec<PathBuf>,
-    /// Saved stickers, newest first.
+    /// Favorite stickers, newest first.
     pub stickers_saved: Vec<PathBuf>,
     /// Imported sticker packs, newest first.
     pub sticker_packs: Vec<StickerPack>,
@@ -300,10 +301,20 @@ pub struct App {
     pub sticker_import_pending: bool,
     /// signal.art link in the sticker tab.
     pub sticker_link: String,
-    /// The local pack the sticker grid is filtered by, if any.
-    pub sticker_pack: Option<PathBuf>,
+    /// The list the sticker tab shows.
+    pub sticker_shelf: StickerShelf,
+    /// Text in the sticker search field.
+    pub sticker_search: String,
+    /// Emojis each listed sticker is tagged with.
+    pub sticker_emojis: std::collections::HashMap<PathBuf, Vec<String>>,
     /// Text in the "New pack" field.
     pub sticker_pack_name: String,
+    /// The picture being made into a sticker.
+    pub sticker_draft: Option<crate::model::StickerDraft>,
+    /// A pack shared in a chat, being viewed: the pack and its publisher.
+    pub sticker_preview: Option<(StickerPack, String)>,
+    /// Whether the viewed pack is still downloading.
+    pub sticker_preview_pending: bool,
     /// A pack just created here, selected once the backend lists it.
     sticker_pack_created: Option<String>,
     scroll_lock: Option<(ScrollAxis, Instant)>,
@@ -579,9 +590,14 @@ impl App {
             stickers_pending: false,
             sticker_import_pending: false,
             sticker_link: String::new(),
-            sticker_pack: None,
+            sticker_shelf: StickerShelf::default(),
+            sticker_search: String::new(),
+            sticker_emojis: std::collections::HashMap::new(),
             sticker_pack_name: String::new(),
             sticker_pack_created: None,
+            sticker_preview: None,
+            sticker_preview_pending: false,
+            sticker_draft: None,
             scroll_lock: None,
             scroll_from_trackpad: false,
             scroll_history: egui::util::History::new(2..16, 0.1),
@@ -1646,13 +1662,15 @@ impl App {
                     }
                 }
                 Event::Stickers {
-                    saved,
+                    favorites,
                     packs,
                     recent,
+                    emojis,
                 } => {
-                    self.stickers_saved = saved;
+                    self.stickers_saved = favorites;
                     self.sticker_packs = packs;
                     self.stickers = recent;
+                    self.sticker_emojis = emojis;
                     // Show a pack made here as soon as it exists. Packs list
                     // newest first, so the first match is the new one.
                     if let Some(name) = self.sticker_pack_created.take() {
@@ -1661,13 +1679,15 @@ impl App {
                             .iter()
                             .find(|pack| pack.local && pack.name == name)
                         {
-                            Some(pack) => self.sticker_pack = Some(pack.dir.clone()),
+                            Some(pack) => self.sticker_shelf = StickerShelf::Pack(pack.dir.clone()),
                             None => self.sticker_pack_created = Some(name),
                         }
                     }
                     // A pack deleted on another surface cannot stay selected.
-                    if self.selected_pack().is_none() {
-                        self.sticker_pack = None;
+                    if matches!(self.sticker_shelf, StickerShelf::Pack(_))
+                        && self.selected_pack().is_none()
+                    {
+                        self.sticker_shelf = StickerShelf::Recent;
                     }
                     self.stickers_pending = false;
                     self.sticker_import_pending = false;
@@ -1793,6 +1813,36 @@ impl App {
                     self.actions.push(Action::StartChat { id, name });
                 }
                 Event::Info(message) => self.toast(message),
+                Event::StickerPicture {
+                    path,
+                    width,
+                    height,
+                    transparent,
+                } => {
+                    self.sticker_draft = Some(crate::model::StickerDraft {
+                        source: path,
+                        width,
+                        height,
+                        transparent,
+                        crop: crate::model::StickerCrop::centered(width, height),
+                        keep_transparent: transparent,
+                        emojis: String::new(),
+                    });
+                    self.picker = None;
+                    self.dialog = Some(Dialog::StickerMaker);
+                }
+                Event::StickerPackPreview(result) => {
+                    self.sticker_preview_pending = false;
+                    match result {
+                        Ok(preview) => self.sticker_preview = Some(preview),
+                        Err(error) => {
+                            if self.dialog == Some(Dialog::StickerPack) {
+                                self.dialog = None;
+                            }
+                            self.toast_error(error);
+                        }
+                    }
+                }
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -1985,12 +2035,12 @@ impl App {
         }
     }
 
-    /// The local pack the picker is filtered by, when it still exists.
+    /// The pack the sticker tab shows, when it still exists.
     pub fn selected_pack(&self) -> Option<&StickerPack> {
-        let dir = self.sticker_pack.as_deref()?;
-        self.sticker_packs
-            .iter()
-            .find(|pack| pack.local && pack.dir == dir)
+        let StickerShelf::Pack(dir) = &self.sticker_shelf else {
+            return None;
+        };
+        self.sticker_packs.iter().find(|pack| pack.dir == *dir)
     }
 
     fn close_chat_search(&mut self) {
@@ -3235,7 +3285,11 @@ impl App {
             Action::CloseMentions => self.mention_start = None,
             Action::SaveSticker(path) => {
                 self.backend.send(Command::SaveSticker { path });
-                self.toast("Sticker saved");
+                self.toast(crate::i18n::gettext(self.locale, "Added to favorites"));
+            }
+            Action::RemoveRecentSticker(path) => {
+                self.stickers.retain(|recent| *recent != path);
+                self.backend.send(Command::RemoveRecentSticker { path });
             }
             Action::ForgetSticker(path) => {
                 self.backend.send(Command::ForgetSticker { path });
@@ -3250,8 +3304,8 @@ impl App {
                 self.backend.send(Command::PickStickerArchive);
             }
             Action::DeleteStickerPack(dir) => {
-                if self.sticker_pack.as_ref() == Some(&dir) {
-                    self.sticker_pack = None;
+                if self.sticker_shelf == StickerShelf::Pack(dir.clone()) {
+                    self.sticker_shelf = StickerShelf::Recent;
                 }
                 self.backend.send(Command::DeleteStickerPack { dir });
             }
@@ -3264,8 +3318,52 @@ impl App {
                     self.backend.send(Command::CreateStickerPack { name });
                 }
             }
-            Action::SelectStickerPack(dir) => {
-                self.sticker_pack = dir;
+            Action::SelectStickerShelf(shelf) => {
+                self.sticker_shelf = shelf;
+            }
+            Action::ViewStickerPack(message) => {
+                if let Some(chat) = self.open_chat.clone() {
+                    self.sticker_preview = None;
+                    self.sticker_preview_pending = true;
+                    self.dialog = Some(Dialog::StickerPack);
+                    self.backend
+                        .send(Command::ViewStickerPack { chat, message });
+                }
+            }
+            Action::PickStickerPicture => {
+                self.backend.send(Command::PickStickerPicture);
+            }
+            Action::MakeSticker { send } => {
+                if let Some(draft) = self.sticker_draft.take() {
+                    let chat = if send { self.open_chat.clone() } else { None };
+                    self.backend.send(Command::MakeSticker {
+                        source: draft.source,
+                        crop: draft.crop,
+                        transparent: draft.transparent && draft.keep_transparent,
+                        emojis: crate::sticker_meta::clean_emojis(&draft.emojis),
+                        chat,
+                    });
+                }
+                self.dialog = None;
+            }
+            Action::AddStickerPack => {
+                if let Some((pack, _)) = &self.sticker_preview {
+                    self.backend.send(Command::AddStickerPack {
+                        dir: pack.dir.clone(),
+                        name: pack.name.clone(),
+                    });
+                }
+                self.dialog = None;
+            }
+            Action::ShareStickerPack(dir) => {
+                if let Some(chat) = self.open_chat.clone() {
+                    self.picker = None;
+                    self.toast(crate::i18n::gettext(
+                        self.locale,
+                        "Sending the sticker pack…",
+                    ));
+                    self.backend.send(Command::SendStickerPack { chat, dir });
+                }
             }
             Action::SetStickerPack {
                 pack,
@@ -4565,9 +4663,10 @@ mod tests {
 
     fn stickers_event(packs: Vec<StickerPack>) -> Event {
         Event::Stickers {
-            saved: Vec::new(),
+            favorites: Vec::new(),
             packs,
             recent: Vec::new(),
+            emojis: std::collections::HashMap::new(),
         }
     }
 
@@ -4578,10 +4677,10 @@ mod tests {
         let ctx = egui::Context::default();
         app.apply(Action::CreateStickerPack("   ".into()), &ctx);
         app.apply(Action::CreateStickerPack("  Bom dia  ".into()), &ctx);
-        assert!(app.sticker_pack.is_none(), "the folder is not known yet");
+        assert_eq!(app.sticker_shelf, StickerShelf::Recent, "no folder yet");
         events.send(stickers_event(Vec::new())).unwrap();
         app.handle_events();
-        assert!(app.sticker_pack.is_none(), "an unrelated update waits");
+        assert_eq!(app.sticker_shelf, StickerShelf::Recent, "an update waits");
         events
             .send(stickers_event(vec![
                 local_pack("Bom dia", "/packs/Bom dia 2"),
@@ -4590,12 +4689,12 @@ mod tests {
             .unwrap();
         app.handle_events();
         assert_eq!(
-            app.sticker_pack.as_deref(),
-            Some(std::path::Path::new("/packs/Bom dia 2")),
+            app.sticker_shelf,
+            StickerShelf::Pack(PathBuf::from("/packs/Bom dia 2")),
             "the trimmed name picks the newest pack of that name"
         );
-        app.apply(Action::SelectStickerPack(None), &ctx);
-        assert!(app.sticker_pack.is_none(), "everything is a selection too");
+        app.apply(Action::SelectStickerShelf(StickerShelf::Favorites), &ctx);
+        assert_eq!(app.sticker_shelf, StickerShelf::Favorites);
     }
 
     #[test]
@@ -4611,15 +4710,16 @@ mod tests {
         app.handle_events();
         let ctx = egui::Context::default();
         app.apply(
-            Action::SelectStickerPack(Some(PathBuf::from("/packs/Bom dia"))),
+            Action::SelectStickerShelf(StickerShelf::Pack(PathBuf::from("/packs/Bom dia"))),
             &ctx,
         );
         assert!(app.selected_pack().is_some());
         events.send(stickers_event(Vec::new())).unwrap();
         app.handle_events();
-        assert!(
-            app.sticker_pack.is_none(),
-            "a pack deleted elsewhere cannot keep filtering the grid"
+        assert_eq!(
+            app.sticker_shelf,
+            StickerShelf::Recent,
+            "a pack deleted elsewhere cannot stay open"
         );
     }
 

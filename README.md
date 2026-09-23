@@ -195,13 +195,20 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   phone. Creating polls in disappearing-message chats is not yet supported by
   the protocol library's poll API, so ZapFast blocks it instead of ignoring the timer.
 - **Emoji, GIF, and sticker picker.** Search emoji and GIFs, use recent emoji
-  and stickers, and save stickers with a right-click. Emoji autocomplete and
+  and stickers, and add stickers to Favorites with a right-click. Favorites
+  sync with your phone both ways, and Recent holds only stickers you sent. Emoji autocomplete and
   picker search select their first match; use the arrow keys and Enter to
   choose it. GIF search needs a free GIPHY API key unless the build includes
   one.
-- **Sticker packs.** Import a pack from a `signal.art` link or `.wastickers`
-  file, or make your own packs from any sticker with a right-click. Animated
-  packs remain animated. Packs are stored as WebP files on your computer.
+- **Sticker packs.** A tab strip like WhatsApp's holds Recent, Favorites, and
+  every pack. Search stickers by emoji, by a word that names one, or by pack
+  name. Import a pack from a `signal.art` link or `.wastickers` file, or make
+  your own packs from any sticker with a right-click. Open WhatsApp sticker
+  packs shared in a chat and add them, or send any of your packs as one.
+  Turn any picture into a sticker: crop it square, keep its transparent
+  background, and tag it with emojis.
+  Animated packs remain animated. Packs are stored as WebP files on your
+  computer.
 - **Consistent names.** Use names from your address book or public WhatsApp
   profile names across chats, replies, mentions, and notifications.
 - **Groups.** See members, sender names, and sender pictures. Announcement
@@ -368,7 +375,7 @@ the profile was moved/restored, and the error text with personal paths removed.
 Never attach the archive, keys, or full logs from older releases.
 
 Only `archive.db` and its SQLite journal/WAL are encrypted. Device credentials in
-`session.db`, downloaded media, profile pictures, saved sticker files and settings
+`session.db`, downloaded media, profile pictures, favorite sticker files and settings
 remain ordinary files. Use full-disk encryption for those files, swap, backups and
 remnants of the old plaintext archive. Migration removes the original only after
 verifying its encrypted copy; deletion cannot guarantee erasure from SSDs or
@@ -526,12 +533,12 @@ from the environment and honors `NO_PROXY`.
 | Device keys | `~/.local/state/zapfast/session.db` | Owned by whatsapp-rust; deleting it unlinks |
 | Messages | `~/.local/state/zapfast/archive.db` | SQLCipher-encrypted SQLite, unlocked by the OS keyring; raw messages retain attachment keys |
 | Attachments, avatars | `~/.cache/zapfast/` | Safe to delete; **Settings > Files > Change…** sends new downloads to another folder, leaving earlier ones in place |
-| Saved stickers and packs | `~/.local/state/zapfast/stickers/` | Plain WebP files; each pack is a folder |
+| Favorite stickers and packs | `~/.local/state/zapfast/stickers/` | Plain WebP files; each pack is a folder |
 | Log of the last run | `~/.local/state/zapfast/zapfast.log` | `--verbose` for more |
 
 macOS and Windows use the standard platform directories selected by the
 `directories` crate. On first start, ZapFast moves settings, the linked session,
-message archive, saved stickers, caches, and window state from `fastsapp`
+message archive, favorite stickers, caches, and window state from `fastsapp`
 (or the earlier `fastwhatsapp`) paths. Existing ZapFast directories take
 precedence and are never overwritten. Quit FastsApp before starting ZapFast;
 if an older copy is still running, the new launch brings its window forward.

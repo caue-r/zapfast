@@ -184,15 +184,17 @@ pub fn saved(dir: &Path) -> Vec<PathBuf> {
     saved.into_iter().map(|(_, path)| path).collect()
 }
 
-/// Saves a sticker under its content hash to deduplicate copies.
-pub fn save(dir: &Path, path: &Path) -> Result<(), String> {
+/// Saves a sticker under its content hash to deduplicate copies, and
+/// returns that hash.
+pub fn save(dir: &Path, path: &Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    let target = dir.join(format!("{}.webp", content_hash(&bytes)));
+    let hash = content_hash(&bytes);
+    let target = dir.join(format!("{hash}.webp"));
     if !target.exists() {
         std::fs::write(&target, &bytes).map_err(|error| error.to_string())?;
     }
-    Ok(())
+    Ok(hash)
 }
 
 #[cfg(test)]

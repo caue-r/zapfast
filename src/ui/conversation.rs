@@ -2135,6 +2135,7 @@ fn transcript_row(
             .to_owned(),
         ),
         Content::Contact { display_name, .. } => Some(format!("[contact: {display_name}]")),
+        Content::StickerPack { name, .. } => Some(format!("[sticker pack: {name}]")),
         Content::Poll { question, .. } => Some(format!("[poll: {question}]")),
         Content::Interactive {
             card: Some(card), ..
@@ -3074,7 +3075,12 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
     }
     if let Content::Sticker { media, .. } = &message.content
         && let Some(path) = &media.path
-        && widgets::menu_item(ui, &palette, Some(Icon::Sticker), "Save sticker")
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Star),
+            &crate::i18n::gettext(view.locale, "Add to favorites"),
+        )
     {
         actions.push(Action::SaveSticker(path.clone()));
     }
@@ -3495,6 +3501,45 @@ fn content(
                         .unwrap_or("");
                     if !phone.is_empty() {
                         theme::text(ui, phone, theme::regular(12.5), palette.secondary);
+                    }
+                });
+            });
+            None
+        }
+        Content::StickerPack {
+            name,
+            publisher,
+            count,
+            caption,
+        } => {
+            let icon = |ui: &mut egui::Ui| {
+                theme::icon(ui, Icon::Sticker, 20.0, palette.accent);
+            };
+            mirrored_row(ui, own, icon, |ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    widgets::rich_text(ui, name, theme::medium(14.0), palette.text);
+                    let stickers =
+                        crate::i18n::ngettext(view.locale, "{} sticker", "{} stickers", *count)
+                            .replace("{}", &count.to_string());
+                    let detail = if publisher.trim().is_empty() {
+                        stickers
+                    } else {
+                        format!("{publisher} · {stickers}")
+                    };
+                    widgets::rich_text(ui, &detail, theme::regular(12.5), palette.secondary);
+                    if let Some(caption) = caption {
+                        widgets::rich_text(ui, caption, theme::regular(13.5), palette.text);
+                    }
+                    if theme::link(
+                        ui,
+                        crate::i18n::gettext(view.locale, "View stickers"),
+                        theme::regular(12.5),
+                        palette.link,
+                    )
+                    .clicked()
+                    {
+                        actions.push(Action::ViewStickerPack(message.id.clone()));
                     }
                 });
             });

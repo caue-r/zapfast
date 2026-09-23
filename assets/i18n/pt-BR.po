@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: src/model.rs:70 src/ui/picker.rs:1166
+#: src/model.rs:70
 msgid "All"
 msgstr "Todas"
 
@@ -192,49 +192,104 @@ msgid_plural "{} unread messages"
 msgstr[0] "{} mensagem não lida"
 msgstr[1] "{} mensagens não lidas"
 
-#: src/ui/conversation.rs:3085
+#: src/ui/conversation.rs:3082 src/ui/dialogs.rs:973 src/ui/picker.rs:1570
+msgid "Add to favorites"
+msgstr "Adicionar aos favoritos"
+
+#: src/ui/conversation.rs:3091
 msgid "Open in system player"
 msgstr "Abrir no player do sistema"
 
-#: src/ui/conversation.rs:3153 src/ui/message_info.rs:17
+#: src/ui/conversation.rs:3159 src/ui/message_info.rs:17
 msgid "Message info"
 msgstr "Dados da mensagem"
 
-#: src/ui/conversation.rs:3384 src/ui/conversation.rs:3465
+#: src/ui/conversation.rs:3390 src/ui/conversation.rs:3471
 msgid "Open in a map"
 msgstr "Abrir em um mapa"
 
-#: src/ui/conversation.rs:3417
+#: src/ui/conversation.rs:3423
 msgid "Live location ended"
 msgstr "Localização em tempo real encerrada"
 
-#: src/ui/conversation.rs:3419
+#: src/ui/conversation.rs:3425
 msgid "Live location"
 msgstr "Localização em tempo real"
 
-#: src/ui/conversation.rs:3430
+#: src/ui/conversation.rs:3436
 #, rust-format
 msgid "Updated {time}"
 msgstr "Atualizada às {time}"
 
-#: src/ui/conversation.rs:4855
+#: src/ui/conversation.rs:3523
+#, rust-format
+msgid "{} sticker"
+msgid_plural "{} stickers"
+msgstr[0] "{} figurinha"
+msgstr[1] "{} figurinhas"
+
+#: src/ui/conversation.rs:3536
+msgid "View stickers"
+msgstr "Ver figurinhas"
+
+#: src/ui/conversation.rs:4900
 msgid "Pause"
 msgstr "Pausar"
 
-#: src/ui/conversation.rs:4857
+#: src/ui/conversation.rs:4902
 #, fuzzy
 msgid "Play"
 msgstr "Reproduzida"
 
-#: src/ui/conversation.rs:4880
+#: src/ui/conversation.rs:4925
 msgid "Unmute"
 msgstr "Ativar som"
 
-#: src/ui/conversation.rs:4882
+#: src/ui/conversation.rs:4927
 msgid "Mute"
 msgstr "Silenciar"
 
-#: src/ui/dialogs.rs:1186
+#: src/ui/dialogs.rs:799
+msgid "Sticker pack"
+msgstr "Pacote de figurinhas"
+
+#: src/ui/dialogs.rs:804
+msgid "Downloading the pack…"
+msgstr "Baixando o pacote…"
+
+#: src/ui/dialogs.rs:828
+msgid "Add to my stickers"
+msgstr "Adicionar às minhas figurinhas"
+
+#: src/ui/dialogs.rs:835 src/ui/message_info.rs:28 src/ui/labels.rs:271
+msgid "Close"
+msgstr "Fechar"
+
+#: src/ui/dialogs.rs:852
+msgid "Make a sticker"
+msgstr "Criar figurinha"
+
+#: src/ui/dialogs.rs:916
+msgid "Size"
+msgstr "Tamanho"
+
+#: src/ui/dialogs.rs:931
+msgid "Keep the transparent background"
+msgstr "Manter o fundo transparente"
+
+#: src/ui/dialogs.rs:948
+msgid "Emojis that describe it, like 😂 or ❤️"
+msgstr "Emojis que a descrevam, como 😂 ou ❤️"
+
+#: src/ui/dialogs.rs:965
+msgid "Send"
+msgstr "Enviar"
+
+#: src/ui/dialogs.rs:980 src/ui/settings.rs:686
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: src/ui/dialogs.rs:1385
 #, rust-format
 msgid "{} member"
 msgid_plural "{} members"
@@ -344,10 +399,6 @@ msgstr "Desconectar este computador"
 msgid "Save"
 msgstr "Salvar"
 
-#: src/ui/settings.rs:686
-msgid "Cancel"
-msgstr "Cancelar"
-
 #: src/ui/settings.rs:750
 msgid "A native WhatsApp client built with Rust, egui, and whatsapp-rust."
 msgstr "Um cliente nativo do WhatsApp feito com Rust, egui e whatsapp-rust."
@@ -370,10 +421,6 @@ msgstr "Código-fonte"
 #, rust-format
 msgid "Built with love by {name}"
 msgstr "Feito com amor por {name}"
-
-#: src/ui/message_info.rs:28 src/ui/labels.rs:271
-msgid "Close"
-msgstr "Fechar"
 
 #: src/ui/message_info.rs:44
 msgid "This message is no longer available."
@@ -438,17 +485,25 @@ msgstr[1] "{} restantes"
 msgid "No one yet"
 msgstr "Ninguém ainda"
 
-#: src/app.rs:969
+#: src/app.rs:985
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr "Já existe uma etiqueta chamada “{name}”."
 
-#: src/app.rs:3520 src/ui/labels.rs:294
+#: src/app.rs:3288
+msgid "Added to favorites"
+msgstr "Adicionada aos favoritos"
+
+#: src/app.rs:3363
+msgid "Sending the sticker pack…"
+msgstr "Enviando o pacote de figurinhas…"
+
+#: src/app.rs:3618 src/ui/labels.rs:294
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "Você tem {limit} etiquetas, o máximo que o ZapFast guarda."
 
-#: src/app.rs:3998
+#: src/app.rs:4096
 msgid "This video opens in your system player"
 msgstr "Este vídeo abre no player do sistema"
 
@@ -566,48 +621,120 @@ msgstr "Renomear ou trocar a cor"
 msgid "Delete this label. Its chats keep their messages."
 msgstr "Excluir esta etiqueta. As conversas dela mantêm as mensagens."
 
-#: src/ui/picker.rs:1180
-msgid "My packs"
-msgstr "Meus pacotes"
-
-#: src/ui/picker.rs:1192
-msgid "Create this pack"
-msgstr "Criar este pacote"
-
-#: src/ui/picker.rs:1207
-msgid "New pack…"
-msgstr "Novo pacote…"
-
-#: src/ui/picker.rs:1289
-msgid "Loading your stickers…"
-msgstr "Carregando suas figurinhas…"
-
-#: src/ui/picker.rs:1291
-msgid ""
-"Recent stickers appear here. Right-click one to save it. To import a pack, "
-"paste a signal.art link or open a .wastickers file."
-msgstr "As figurinhas recentes aparecem aqui. Clique com o botão direito em uma para salvá-la. Para importar um pacote, cole um link do signal.art ou abra um arquivo .wastickers."
-
-#: src/ui/picker.rs:1325
-msgid "Nothing here yet. Right-click any sticker to add it to this pack."
-msgstr "Nada aqui ainda. Clique com o botão direito em qualquer figurinha para adicioná-la a este pacote."
-
-#: src/ui/picker.rs:1338
-msgid "Saved"
-msgstr "Salvas"
-
-#: src/ui/picker.rs:1355
-msgid "Remove this pack"
-msgstr "Remover este pacote"
-
-#: src/ui/picker.rs:1369
+#: src/ui/picker.rs:1148
 msgid "Recent"
 msgstr "Recentes"
 
-#: src/ui/picker.rs:1485
-msgid "Remove from saved"
-msgstr "Remover das salvas"
+#: src/ui/picker.rs:1149
+msgid "Favorites"
+msgstr "Favoritas"
 
-#: src/ui/picker.rs:1486
-msgid "Save sticker"
-msgstr "Salvar figurinha"
+#: src/ui/picker.rs:1150
+msgid "Add stickers"
+msgstr "Adicionar figurinhas"
+
+#: src/ui/picker.rs:1185
+msgid "Search by emoji, word, or pack"
+msgstr "Pesquisar por emoji, palavra ou pacote"
+
+#: src/ui/picker.rs:1223
+msgid "No stickers match your search."
+msgstr "Nenhuma figurinha corresponde à sua pesquisa."
+
+#: src/ui/picker.rs:1237
+msgid "Loading your stickers…"
+msgstr "Carregando suas figurinhas…"
+
+#: src/ui/picker.rs:1239
+msgid "Stickers you send appear here."
+msgstr "As figurinhas que você envia aparecem aqui."
+
+#: src/ui/picker.rs:1248
+msgid ""
+"Right-click any sticker to add it to your favorites. They stay in sync with "
+"your phone."
+msgstr "Clique com o botão direito em qualquer figurinha para adicioná-la às favoritas. Elas ficam sincronizadas com seu celular."
+
+#: src/ui/picker.rs:1264
+msgid "Remove this pack"
+msgstr "Remover este pacote"
+
+#: src/ui/picker.rs:1278
+msgid "Send this pack to the chat"
+msgstr "Enviar este pacote para a conversa"
+
+#: src/ui/picker.rs:1292
+msgid "Nothing here yet. Right-click any sticker to add it to this pack."
+msgstr ""
+"Nada aqui ainda. Clique com o botão direito em qualquer figurinha para "
+"adicioná-la a este pacote."
+
+#: src/ui/picker.rs:1365
+msgid "Import a pack"
+msgstr "Importar um pacote"
+
+#: src/ui/picker.rs:1373
+msgid ""
+"Paste a signal.art link from signalstickers.org, or open a .wastickers file."
+msgstr "Cole um link do signal.art do signalstickers.org ou abra um arquivo .wastickers."
+
+#: src/ui/picker.rs:1383
+msgid "Make your own"
+msgstr "Crie as suas"
+
+#: src/ui/picker.rs:1391
+msgid ""
+"Start a pack, then right-click any sticker to add it. Or turn a picture into "
+"a sticker."
+msgstr "Crie um pacote e depois clique com o botão direito em qualquer figurinha para adicioná-la. Ou transforme uma imagem em figurinha."
+
+#: src/ui/picker.rs:1403
+msgid "Make a sticker from a picture…"
+msgstr "Criar figurinha a partir de uma imagem…"
+
+#: src/ui/picker.rs:1418
+msgid "Create pack"
+msgstr "Criar pacote"
+
+#: src/ui/picker.rs:1429
+msgid "New pack…"
+msgstr "Novo pacote…"
+
+#: src/ui/picker.rs:1462
+msgid "Find packs"
+msgstr "Encontrar pacotes"
+
+#: src/ui/picker.rs:1463
+msgid "Open file"
+msgstr "Abrir arquivo"
+
+#: src/ui/picker.rs:1478
+msgid "Paste a signal.art link"
+msgstr "Cole um link do signal.art"
+
+#: src/ui/picker.rs:1506
+msgid "Browse signalstickers.org"
+msgstr "Explorar signalstickers.org"
+
+#: src/ui/picker.rs:1522
+msgid "Importing the pack…"
+msgstr "Importando o pacote…"
+
+#: src/ui/picker.rs:1569
+msgid "Remove from favorites"
+msgstr "Remover dos favoritos"
+
+#: src/ui/picker.rs:1571
+msgid "Remove from recents"
+msgstr "Remover das recentes"
+
+#~ msgid ""
+#~ "Recent stickers appear here. Right-click one to save it. To import a "
+#~ "pack, paste a signal.art link or open a .wastickers file."
+#~ msgstr ""
+#~ "As figurinhas recentes aparecem aqui. Clique com o botão direito em uma "
+#~ "para salvá-la. Para importar um pacote, cole um link do signal.art ou "
+#~ "abra um arquivo .wastickers."
+
+#~ msgid "Saved"
+#~ msgstr "Salvas"

@@ -112,6 +112,9 @@ opus = "0.4"
 ogg = "0.9"
 # Converts animated Signal APNG stickers to the animated WebP used by WhatsApp.
 webp-animation = "0.10"
+# Encodes stickers made from pictures as still lossy WebP. Already included
+# through webp-animation, whose animation encoder always writes an animation.
+libwebp-sys2 = { version = "0.2", features = ["1_2"] }
 # A small translation trait for catalogs generated from PO files at build time.
 tr = { version = "0.1.11", default-features = false }
 # Detects the user's system locale across platforms, for the interface language.
