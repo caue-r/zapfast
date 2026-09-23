@@ -999,6 +999,10 @@ pub enum Action {
     PickNotificationSound {
         group: bool,
     },
+    /// Asks for a folder for new downloads.
+    PickDownloadFolder,
+    /// Sets or resets (`None`) the folder for new downloads.
+    SetDownloadFolder(Option<PathBuf>),
     /// Plays a notification sound once, as a preview.
     PreviewSound(PathBuf),
     ZoomBy(f32),

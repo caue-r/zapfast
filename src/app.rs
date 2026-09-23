@@ -413,6 +413,9 @@ impl App {
                 crate::util::twelve_hour_clock();
             })
             .ok();
+        app.backend.send(Command::SetDownloadFolder(
+            app.settings.download_folder.clone(),
+        ));
         if crate::autostart::supported() {
             app.start_with_system = Some(crate::autostart::enabled());
         }
@@ -1528,6 +1531,9 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::DownloadFolderPicked(path) => {
+                    self.actions.push(Action::SetDownloadFolder(Some(path)));
+                }
                 Event::NotificationSoundPicked { group, path } => {
                     crate::notify::play_sound(path.clone());
                     self.actions.push(Action::SetNotificationSound {
@@ -3373,6 +3379,12 @@ impl App {
                 self.backend.send(Command::PickNotificationSound { group });
             }
             Action::PreviewSound(path) => crate::notify::play_sound(path),
+            Action::PickDownloadFolder => self.backend.send(Command::PickDownloadFolder),
+            Action::SetDownloadFolder(folder) => {
+                self.settings.download_folder = folder.clone();
+                self.mark_settings_dirty();
+                self.backend.send(Command::SetDownloadFolder(folder));
+            }
             Action::SetStartWithSystem(enabled) => match crate::autostart::set(enabled) {
                 Ok(()) => self.start_with_system = Some(crate::autostart::enabled()),
                 Err(error) => self.toast_error(format!("Could not change the login item: {error}")),

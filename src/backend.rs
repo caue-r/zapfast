@@ -302,6 +302,10 @@ pub enum Command {
     PickNotificationSound {
         group: bool,
     },
+    /// Asks for a folder for new downloads.
+    PickDownloadFolder,
+    /// Where new downloads go; `None` is the cache.
+    SetDownloadFolder(Option<std::path::PathBuf>),
     /// Asks where to save a copy of an attachment, then copies it there.
     SaveAttachmentAs {
         source: std::path::PathBuf,
@@ -593,6 +597,8 @@ pub enum Event {
     ReceiptsPrivacy {
         disabled: bool,
     },
+    /// A folder chosen for new downloads.
+    DownloadFolderPicked(std::path::PathBuf),
     /// An audio file chosen as a notification sound.
     NotificationSoundPicked {
         group: bool,

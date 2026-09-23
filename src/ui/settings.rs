@@ -299,16 +299,28 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             }
                         },
                     );
-                    let media = app.dirs.media_cache_dir();
+                    let custom = app.settings.download_folder.clone();
+                    let media = custom.clone().unwrap_or_else(|| app.dirs.media_cache_dir());
+                    let description = if custom.is_some() {
+                        format!("{}. Earlier downloads stay where they are.", media.display())
+                    } else {
+                        media.display().to_string()
+                    };
                     widgets::setting_row(
                         ui,
                         &palette,
                         "Downloaded attachments",
-                        &media.display().to_string(),
+                        &description,
                         |ui| {
                             if theme::soft_button(ui, &palette, Some(Icon::ExternalLink), "Open folder", false).clicked() {
                                 let _ = std::fs::create_dir_all(&media);
                                 app.actions.push(Action::OpenFolder(media.clone()));
+                            }
+                            if theme::soft_button(ui, &palette, None, "Change…", false).clicked() {
+                                app.actions.push(Action::PickDownloadFolder);
+                            }
+                            if custom.is_some() && theme::soft_button(ui, &palette, None, "Use default", false).clicked() {
+                                app.actions.push(Action::SetDownloadFolder(None));
                             }
                         },
                     );
