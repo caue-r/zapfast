@@ -3887,7 +3887,18 @@ impl Worker {
             Command::SetMuted(chat, until) => {
                 let _ = self.archive.set_muted(&chat, until);
                 self.emit_chat(&chat);
+                let channel = chat.ends_with("@newsletter");
                 self.tell_phone(&chat, move |client, jid| async move {
+                    // A channel also keeps its own mute on the server, which
+                    // WhatsApp Web toggles as the channel's Mute.
+                    if channel
+                        && let Err(error) = client
+                            .newsletter()
+                            .set_admin_mute(&jid, until.is_some())
+                            .await
+                    {
+                        log::debug!("channel mute not sent: {error}");
+                    }
                     match until {
                         None => client.chat_actions().unmute_chat(&jid).await,
                         Some(0) => client.chat_actions().mute_chat(&jid).await,

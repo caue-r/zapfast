@@ -329,6 +329,28 @@ fn filter_chips(app: &mut App, ui: &mut egui::Ui) {
                     // Store the chip rect for interaction tests.
                     ui.ctx()
                         .data_mut(|data| data.insert_temp(filter_chip_id(filter), chip.rect));
+                    let chip = if filter == ChatFilter::Channels {
+                        let now = crate::util::now();
+                        let all_muted = app
+                            .chats
+                            .iter()
+                            .filter(|chat| chat.is_channel())
+                            .all(|chat| chat.muted(now));
+                        chip.context_menu(|ui| {
+                            let (icon, label) = if all_muted {
+                                (Icon::Bell, "Unmute all channels")
+                            } else {
+                                (Icon::BellOff, "Mute all channels")
+                            };
+                            if widgets::menu_item(ui, &palette, Some(icon), label) {
+                                app.actions.push(Action::MuteAllChannels(!all_muted));
+                                ui.close();
+                            }
+                        });
+                        chip
+                    } else {
+                        chip
+                    };
                     if chip.clicked() {
                         // A second click on the active chip returns to every chat.
                         let next = if selected { ChatFilter::All } else { filter };

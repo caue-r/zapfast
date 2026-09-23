@@ -958,6 +958,8 @@ pub enum Action {
     SetChatFilter(ChatFilter),
     /// Shows or leaves the archived chats.
     ShowArchived(bool),
+    /// Mutes (`true`) or unmutes every followed channel.
+    MuteAllChannels(bool),
     /// Joins the group of the invite being previewed.
     JoinGroup,
     /// A chat opened from the main list, kept there under the Unread filter.

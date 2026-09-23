@@ -3229,6 +3229,17 @@ impl App {
                     }
                 }
             }
+            Action::MuteAllChannels(mute) => {
+                let channels: Vec<ChatId> = self
+                    .chats
+                    .iter()
+                    .filter(|chat| chat.is_channel())
+                    .map(|chat| chat.id.clone())
+                    .collect();
+                for chat in channels {
+                    self.actions.push(Action::SetMuted(chat, mute.then_some(0)));
+                }
+            }
             Action::ShowArchived(show) => {
                 if self.locked_folder {
                     self.close_locked_folder();
@@ -5362,6 +5373,28 @@ mod tests {
         assert_eq!(app.matching_contacts().len(), 1);
         app.search = String::new();
         assert!(app.matching_contacts().is_empty());
+    }
+
+    #[test]
+    fn muting_all_channels_leaves_other_chats_alone() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let ctx = egui::Context::default();
+        app.chats = vec![
+            Chat::new("1@newsletter".into(), "News".into()),
+            Chat::new("2@newsletter".into(), "More news".into()),
+            Chat::new("3@s.whatsapp.net".into(), "Ada".into()),
+        ];
+        app.apply(Action::MuteAllChannels(true), &ctx);
+        app.apply_actions(&ctx);
+        let muted: Vec<String> = std::iter::from_fn(|| commands.try_recv().ok())
+            .filter_map(|command| match command {
+                Command::SetMuted(chat, Some(0)) => Some(chat),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(muted, ["1@newsletter", "2@newsletter"]);
     }
 
     #[test]
