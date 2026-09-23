@@ -2905,6 +2905,18 @@ impl App {
                     self.apply_theme(ctx);
                 }
             }
+            Action::SetWallpaperColor(color) => {
+                if self.palette.dark {
+                    self.settings.dark_wallpaper_color = color;
+                } else {
+                    self.settings.wallpaper_color = color;
+                }
+                self.mark_settings_dirty();
+            }
+            Action::SetWallpaperDoodles(show) => {
+                self.settings.show_wallpaper = show;
+                self.mark_settings_dirty();
+            }
             Action::ReloadThemes => self.load_custom_themes(),
             Action::OpenThemesFolder => {
                 let directory = self.dirs.config.join("themes");
@@ -3543,6 +3555,28 @@ mod tests {
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("zapfast-app-{}", std::process::id()));
         App::headless(AppDirs::under(&root), Settings::default()).0
+    }
+
+    #[test]
+    fn wallpaper_colors_remain_independent_between_themes() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let light_color = crate::settings::WallpaperColor::Cruise;
+        let dark_color = crate::settings::WallpaperColor::Nordic;
+        let original_dark_color = app.settings.dark_wallpaper_color;
+
+        app.palette.dark = false;
+        app.apply(Action::SetWallpaperColor(light_color), &ctx);
+        assert_eq!(app.settings.wallpaper_color, light_color);
+        assert_eq!(app.settings.dark_wallpaper_color, original_dark_color);
+        assert!(app.settings_dirty);
+
+        app.settings_dirty = false;
+        app.palette.dark = true;
+        app.apply(Action::SetWallpaperColor(dark_color), &ctx);
+        assert_eq!(app.settings.dark_wallpaper_color, dark_color);
+        assert_eq!(app.settings.wallpaper_color, light_color);
+        assert!(app.settings_dirty);
     }
 
     fn paste_release() -> egui::Event {

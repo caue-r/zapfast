@@ -612,6 +612,7 @@ impl Contact {
 pub enum Page {
     Chats,
     Settings,
+    Wallpaper,
 }
 
 /// The tabs of the picker above the composer.
@@ -890,6 +891,8 @@ pub enum Action {
     InstallUpdate,
     SetTheme(crate::settings::ThemeChoice),
     SetCustomTheme(String),
+    SetWallpaperColor(crate::settings::WallpaperColor),
+    SetWallpaperDoodles(bool),
     ReloadThemes,
     OpenThemesFolder,
     SettingsChanged,
