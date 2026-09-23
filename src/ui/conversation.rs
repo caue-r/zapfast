@@ -1399,8 +1399,19 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 );
                             }
                             if response.clicked() {
-                                actions.push(Action::ToggleSelected(message.id.clone()));
+                                let shift = ui.input(|input| input.modifiers.shift);
+                                actions.push(if shift {
+                                    Action::SelectRange(message.id.clone())
+                                } else {
+                                    Action::ToggleSelected(message.id.clone())
+                                });
                             }
+                        } else if let Some(response) = &response
+                            && response.clicked()
+                            && ui.input(|input| input.modifiers.command)
+                        {
+                            // Ctrl-click (Command-click on macOS) starts a selection.
+                            actions.push(Action::SelectMessage(message.id.clone()));
                         }
                         if let Some(response) = response
                             && view.anchor == Some(message.id.as_str())

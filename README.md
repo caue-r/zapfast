@@ -57,9 +57,10 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   does not retry it; send it again yourself. Timestamps follow the system's
   12-hour or 24-hour clock: the time format on Windows and macOS, and GNOME's
   clock format or the time locale (`LC_TIME`) on Linux. **Select** in a
-  message's menu starts a selection: click more messages to add or remove
-  them, then **Forward…** sends them together, in their original order, or
-  Escape cancels.
+  message's menu, or Ctrl-click (Command-click on macOS) on a message, starts
+  a selection: click more messages to add or remove them, Shift-click to add
+  everything up to the one you click, then **Forward…** sends them together,
+  in their original order, or Escape cancels.
 - **WhatsApp formatting.** Bold, italic, strikethrough, code, lists, quotes,
   mentions, and link previews are supported. Links are clickable. Hebrew and
   Arabic RTL paragraphs keep logical word order by reordering font runs,

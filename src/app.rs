@@ -218,6 +218,8 @@ pub struct App {
     pub unread_divider: Option<UnreadDivider>,
     /// Messages selected in a chat, in the chat's order.
     pub selection: Option<(ChatId, Vec<String>)>,
+    /// The message a Shift-click range starts from.
+    selection_anchor: Option<String>,
     avatars: HashMap<String, Option<PathBuf>>,
     avatar_requests: HashSet<String>,
     /// Full-size profile pictures for info dialogs.
@@ -481,6 +483,7 @@ impl App {
             invite: None,
             unread_divider: None,
             selection: None,
+            selection_anchor: None,
             avatars: HashMap::new(),
             avatar_requests: HashSet::new(),
             avatars_full: HashMap::new(),
@@ -2596,10 +2599,44 @@ impl App {
             }
             Action::SelectMessage(id) => {
                 if let Some(chat) = self.open_chat.clone() {
-                    self.selection = Some((chat, vec![id]));
+                    self.selection = Some((chat, vec![id.clone()]));
+                    self.selection_anchor = Some(id);
                 }
             }
+            Action::SelectRange(id) => {
+                let Some((chat, ids)) = self.selection.as_mut() else {
+                    return;
+                };
+                let Some(conversation) = self.conversations.get(chat.as_str()) else {
+                    return;
+                };
+                let position = |id: &str| {
+                    conversation
+                        .messages
+                        .iter()
+                        .position(|message| message.id == id)
+                };
+                let anchor = self.selection_anchor.clone().unwrap_or_else(|| id.clone());
+                if let (Some(from), Some(to)) = (position(&anchor), position(&id)) {
+                    let (from, to) = (from.min(to), from.max(to));
+                    for message in &conversation.messages[from..=to] {
+                        // Deleted and placeholder messages cannot be forwarded.
+                        if !matches!(
+                            message.content,
+                            Content::Revoked
+                                | Content::PhoneOnly { .. }
+                                | Content::Unsupported { .. }
+                        ) && !ids.contains(&message.id)
+                        {
+                            ids.push(message.id.clone());
+                        }
+                    }
+                    ids.sort_by_key(|id| position(id).unwrap_or(usize::MAX));
+                }
+                self.selection_anchor = Some(id);
+            }
             Action::ToggleSelected(id) => {
+                self.selection_anchor = Some(id.clone());
                 if let Some((chat, ids)) = self.selection.as_mut() {
                     if let Some(index) = ids.iter().position(|selected| *selected == id) {
                         ids.remove(index);
@@ -4381,6 +4418,21 @@ mod tests {
             .collect();
         assert_eq!(forwarded, ["first", "third"]);
         assert!(app.selection.is_none());
+        // Shift-click selects everything between the last click and this one,
+        // skipping what cannot be forwarded.
+        let mut deleted = message(chat, "gone", 4);
+        deleted.content = Content::Revoked;
+        app.conversations
+            .get_mut(chat)
+            .unwrap()
+            .merge(vec![deleted, message(chat, "fifth", 5)], false);
+        app.apply(Action::SelectMessage("second".into()), &ctx);
+        app.apply(Action::SelectRange("fifth".into()), &ctx);
+        assert_eq!(
+            app.selection.as_ref().map(|(_, ids)| ids.clone()),
+            Some(vec!["second".into(), "third".into(), "fifth".into()])
+        );
+        app.apply(Action::CancelSelection, &ctx);
         // Unselecting the last message leaves selection mode.
         app.apply(Action::SelectMessage("second".into()), &ctx);
         app.apply(Action::ToggleSelected("second".into()), &ctx);

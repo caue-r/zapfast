@@ -858,6 +858,8 @@ pub enum Action {
     SelectMessage(String),
     /// Adds a message to the selection or removes it.
     ToggleSelected(String),
+    /// Selects every message from the last one clicked to this one.
+    SelectRange(String),
     /// Leaves selection mode.
     CancelSelection,
     /// Loads an outgoing message into the composer for editing.
