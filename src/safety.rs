@@ -28,6 +28,17 @@ pub fn external_url(value: &str) -> Option<String> {
     }
 }
 
+/// Image formats decoded by ZapFast's in-process preview.
+pub fn can_preview_image(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "jpg" | "jpeg" | "png" | "gif" | "webp"
+    )
+}
+
 /// The code of a WhatsApp group invite link such as
 /// `https://chat.whatsapp.com/AbCd123`, which ZapFast opens itself.
 pub fn group_invite_code(value: &str) -> Option<String> {
@@ -156,6 +167,28 @@ mod tests {
             external_url("mailto:test@example.com"),
             Some("mailto:test@example.com".into())
         );
+    }
+
+    #[test]
+    fn only_supported_raster_images_open_in_the_native_preview() {
+        for name in [
+            "photo.JPG",
+            "photo.jpeg",
+            "photo.png",
+            "photo.webp",
+            "photo.gif",
+        ] {
+            assert!(can_preview_image(Path::new(name)), "{name}");
+        }
+        for name in [
+            "photo.bmp",
+            "photo.heic",
+            "photo.avif",
+            "photo.jpg.exe",
+            "photo",
+        ] {
+            assert!(!can_preview_image(Path::new(name)), "{name}");
+        }
     }
 
     #[test]

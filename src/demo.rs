@@ -1643,6 +1643,11 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 }
             }
             "recording" => app.recording = Some(crate::audio::Recorder::rehearsal()),
+            // Shows the native image preview over the demo chat.
+            "preview" => {
+                let (photo, _) = sample_files(app);
+                app.image_preview = Some(crate::image_preview::PreviewState::new(photo));
+            }
             "compose-emoji" => {
                 app.composer = "Andiamo 😊 con due 👍🏽 e poi testo normale".to_owned();
             }
@@ -2879,6 +2884,7 @@ mod tests {
             "voice",
             "voice,voice-menu",
             "recording",
+            "preview",
             "gifs",
             "gifs-badkey",
             "react-menu",
@@ -3048,6 +3054,93 @@ mod tests {
             vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
         );
         assert_eq!(app.composer, "", "Enter sends");
+    }
+
+    /// The composer keeps its draft while the preview is open: Enter does not
+    /// send it, and Tab and Enter reach the preview's own controls instead.
+    #[test]
+    fn the_image_preview_owns_the_keyboard() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.focus_composer = true;
+        render(&mut app, &ctx);
+        frame_with(&mut app, &ctx, vec![egui::Event::Text("draft".into())]);
+        assert_eq!(app.composer, "draft");
+
+        let (photo, _) = sample_files(&app);
+        app.actions.push(crate::model::Action::PreviewImage(photo));
+        // Enter in the very frame the preview opens, before egui knows about
+        // the modal layer.
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
+        );
+        render(&mut app, &ctx);
+        assert_eq!(app.composer, "draft", "Enter must not send the draft");
+        assert!(app.image_preview.is_some());
+
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Tab, egui::Modifiers::NONE)],
+        );
+        render(&mut app, &ctx);
+        let focused = ctx
+            .memory(|memory| memory.focused())
+            .and_then(|id| ctx.read_response(id))
+            .expect("Tab focuses a preview control");
+        assert_eq!(focused.layer_id.id, egui::Id::new("image-preview"));
+
+        // The first control is Close; Enter activates it.
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
+        );
+        render(&mut app, &ctx);
+        assert!(app.image_preview.is_none(), "Enter activates Close");
+        assert_eq!(app.composer, "draft");
+    }
+
+    /// Ctrl++ zooms the picture, not the whole interface, including when the
+    /// layout needs Shift to type the plus.
+    #[test]
+    fn zoom_shortcuts_zoom_the_previewed_image_only() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let interface_zoom = ctx.zoom_factor();
+        let (photo, _) = sample_files(&app);
+        app.actions.push(crate::model::Action::PreviewImage(photo));
+        render(&mut app, &ctx);
+
+        let ctrl_shift = egui::Modifiers {
+            ctrl: true,
+            shift: true,
+            command: !cfg!(target_os = "macos"),
+            ..Default::default()
+        };
+        frame_with(&mut app, &ctx, vec![key(egui::Key::Equals, ctrl_shift)]);
+        render(&mut app, &ctx);
+        assert_eq!(app.image_preview.as_ref().unwrap().zoom(), 1.25);
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Plus, egui::Modifiers::COMMAND)],
+        );
+        render(&mut app, &ctx);
+        assert_eq!(app.image_preview.as_ref().unwrap().zoom(), 1.5625);
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Num0, egui::Modifiers::COMMAND)],
+        );
+        render(&mut app, &ctx);
+        assert!(app.image_preview.as_ref().unwrap().is_fit());
+        assert_eq!(ctx.zoom_factor(), interface_zoom);
     }
 
     #[test]

@@ -6,6 +6,10 @@ use crate::app::App;
 use crate::model::{Action, Chat, Dialog, Page};
 
 pub fn handle(app: &mut App, ctx: &egui::Context) {
+    if app.image_preview.is_some() {
+        preview_keys(app, ctx);
+        return;
+    }
     let editing_text = ctx.text_edit_focused();
     let mut actions = Vec::new();
     ctx.input_mut(|input| {
@@ -177,6 +181,35 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
     if let Some(id) = edit_previous.then(|| app.previous_own_editable()).flatten() {
         actions.push(Action::Edit(id));
     }
+    app.actions.extend(actions);
+}
+
+/// Handles keys while the image preview is open. No chat shortcut runs, and
+/// typing and clipboard input are swallowed; Tab, Enter, Space and the arrows
+/// stay for the preview's own controls.
+fn preview_keys(app: &mut App, ctx: &egui::Context) {
+    let mut actions = Vec::new();
+    ctx.input_mut(|input| {
+        if input.consume_key(Modifiers::NONE, Key::Escape) {
+            actions.push(Action::CloseImagePreview);
+        }
+        let mut event_actions = Vec::new();
+        for event in &input.events {
+            if let egui::Event::Key {
+                key,
+                modifiers,
+                pressed: true,
+                ..
+            } = event
+            {
+                event_actions.extend(crate::image_preview::preview_action(*key, *modifiers));
+            }
+        }
+        actions.extend(event_actions);
+        input
+            .events
+            .retain(|event| !crate::image_preview::consumes_key(event));
+    });
     app.actions.extend(actions);
 }
 

@@ -825,6 +825,15 @@ pub enum Action {
     StartRecording,
     CancelRecording,
     SendRecording,
+    /// Opens a downloaded image in ZapFast's native preview. Only the file
+    /// extension and existence are checked here, and anything else opens
+    /// externally; an image that then fails to decode shows a message with an
+    /// Open externally button inside the preview.
+    PreviewImage(PathBuf),
+    ZoomImageIn,
+    ZoomImageOut,
+    FitImage,
+    CloseImagePreview,
     OpenFile(PathBuf),
     OpenFolder(PathBuf),
     /// Saves a copy of a downloaded attachment where the person chooses.
