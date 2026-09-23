@@ -975,6 +975,36 @@ fn sticker_sample(app: &mut App, shelf: crate::model::StickerShelf, search: &str
     app.sticker_search = search.to_owned();
 }
 
+/// A Recent shelf of animated stickers, more frames than the animation cache
+/// holds at once, for the picker's paused tiles (#165).
+fn animated_sticker_sample(app: &mut App) {
+    sticker_sample(app, crate::model::StickerShelf::Recent, "");
+    let dir = app.dirs.media_cache_dir().join("demo-stickers");
+    let make = |character: char| -> Option<std::path::PathBuf> {
+        let path = dir.join(format!("{:x}-bounce.webp", character as u32));
+        if !path.exists() {
+            let emoji = tour::media::emoji_image(character, 132).ok()?;
+            let mut encoder = webp_animation::Encoder::new((192, 192)).ok()?;
+            let frames = 30;
+            for index in 0..frames {
+                let phase = index as f32 / frames as f32 * std::f32::consts::TAU;
+                let lift = (phase.sin().abs() * 28.0) as i64;
+                let mut tile = image::RgbaImage::new(192, 192);
+                image::imageops::overlay(&mut tile, &emoji, 30, 44 - lift);
+                encoder.add_frame(&tile, index * 50).ok()?;
+            }
+            let webp = encoder.finalize(frames * 50).ok()?;
+            std::fs::write(&path, &*webp).ok()?;
+        }
+        Some(path)
+    };
+    let animated: Vec<_> = "😂🐸🎉👋😎🚀🥳🙏🔥❤😍🤣🐱🦆🐤🐣🐥🦢☕🌅🌻💃🕺🎈🎂"
+        .chars()
+        .filter_map(make)
+        .collect();
+    app.stickers = animated.into_iter().chain(app.stickers.clone()).collect();
+}
+
 /// Applies the UI state selected by `--demo-page`.
 fn interactive_sample(app: &mut App, with_image: bool) {
     use crate::model::{InteractiveButton, InteractiveCard};
@@ -2133,6 +2163,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 sticker_sample(app, pack, "")
             }
             "sticker-search" => sticker_sample(app, crate::model::StickerShelf::Recent, "laugh"),
+            "sticker-animated" => animated_sticker_sample(app),
             "sticker-add" => sticker_sample(app, crate::model::StickerShelf::Add, ""),
             "sticker-maker" => {
                 let (photo, _) = sample_files(app);
@@ -3517,6 +3548,7 @@ mod tests {
             "sticker-favorites",
             "sticker-pack",
             "sticker-search",
+            "sticker-animated",
             "sticker-add",
             "sticker-pack-message",
             "sticker-maker",

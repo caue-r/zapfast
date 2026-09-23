@@ -109,7 +109,9 @@ protocol. These notes are for coding agents and new contributors.
   its C++ from source with the C++ compiler of the host; `nasm` is
   optional and only adds the SIMD paths (the AUR recipes leave it out,
   the build works without it). Frames become textures on the interface
-  thread and are dropped when unseen.
+  thread and are dropped when unseen. A paused animation decodes only its
+  first frame, the poster, and the rest once it plays: full decodes of a
+  picker's paused stickers overran the frame budget and evicted each other.
 - `src/video.rs` plays other videos inside their message, one at a time,
   with the same `mp4` and `openh264` pieces: a thread decodes from the
   keyframe before the start (openh264 must not flush after each packet or

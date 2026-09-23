@@ -4570,7 +4570,12 @@ impl Worker {
                     }
                     Err(_error) => log::warn!("could not fetch a sticker"),
                 }
-                self.emit_stickers();
+                // Recent is sorted by use, so each arrival lands mid-grid and
+                // shifts every tile after it. Publish the batch once, instead
+                // of reshuffling the open picker under the reader (#165).
+                if self.sticker_fetches.is_empty() {
+                    self.emit_stickers();
+                }
             }
             Command::MeInfo { about } => {
                 self.me_about = about;
@@ -5504,11 +5509,12 @@ impl Worker {
             let dir = dir.clone();
             let hash = sticker.hash;
             tokio::spawn(async move {
-                let result = async {
+                // The shelf waits for the whole batch, so none may hang.
+                let result = with_attachment_deadline(ATTACHMENT_TIMEOUT, async {
                     let path = dir.join(format!("{hash}.webp"));
                     let sticker = PhoneSticker(meta);
                     download_attachment(&client, &sticker, &dir, &path).await
-                }
+                })
                 .await;
                 let _ = commands.send(Command::StickerFetched { hash, result });
             });
