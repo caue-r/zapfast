@@ -11,13 +11,22 @@ WhatsApp Web and its Chromium processes. [See the measurements](https://zapfast.
 ZapFast is a sibling of [Spotifast](https://spotifast.rocks),
 with the same native UI for a different service.
 
-![ZapFast showing a conversation with an attachment, voice messages, reactions, a quoted reply, and a link preview](docs/screenshot.png)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
+  <img src="docs/screenshot.png" alt="ZapFast showing a conversation with an attachment, voice messages, reactions, a quoted reply, and a link preview">
+</picture>
 
 See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
 
-![A titled group chat with participant names, reactions, a quoted mention, and a poll](docs/screenshot-group.png)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-group-light.png">
+  <img src="docs/screenshot-group.png" alt="A titled group chat with participant names, reactions, a quoted mention, and a poll">
+</picture>
 
-![The linking screen with the QR code](docs/screenshot-link.png)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-link-light.png">
+  <img src="docs/screenshot-link.png" alt="The linking screen with the QR code">
+</picture>
 
 ## What it does
 

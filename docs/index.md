@@ -18,10 +18,11 @@ hero:
       text: GitHub
       link: https://github.com/crmne/zapfast
   image:
-    src: /screenshot.png
+    dark: /screenshot.png
+    light: /screenshot-light.png
     alt: "ZapFast showing a conversation with an attachment, voice messages, reactions, a quoted reply, and a link preview"
-    width: 1387
-    height: 1040
+    width: 1800
+    height: 1360
 
 features:
   - icon: ⚡
