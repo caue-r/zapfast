@@ -895,6 +895,9 @@ pub fn populate(app: &mut App) {
     if let Some(chat) = app.chats.iter_mut().find(|chat| chat.id == ada) {
         chat.unread = 0;
     }
+    // The privacy rows read like a linked account, so the sample shows them
+    // filled instead of disabled.
+    app.account_privacy = crate::privacy::Snapshot::demo();
     app.scroll_to_bottom = true;
     app.focus_composer = false;
 }
@@ -4825,6 +4828,110 @@ mod tests {
         render(&mut app, &ctx);
         assert!(app.reaction_target.is_none());
         assert!(!egui::Popup::is_id_open(&ctx, id.with("popup")));
+    }
+
+    #[test]
+    fn opening_settings_does_not_write_account_privacy() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        apply_flags(&mut app, Some("settings"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            !commands.iter().any(|command| matches!(
+                command,
+                crate::backend::Command::SetAccountPrivacy { .. }
+            )),
+            "opening Settings must not write privacy"
+        );
+    }
+
+    #[test]
+    fn set_account_privacy_enqueues_the_phone_write() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.actions.push(crate::model::Action::SetAccountPrivacy {
+            kind: crate::privacy::PrivacyKind::Profile,
+            choice: crate::privacy::PrivacyChoice::Nobody,
+        });
+        render(&mut app, &ctx);
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            commands.iter().any(|command| matches!(
+                command,
+                crate::backend::Command::SetAccountPrivacy {
+                    kind: crate::privacy::PrivacyKind::Profile,
+                    choice: crate::privacy::PrivacyChoice::Nobody,
+                }
+            )),
+            "picking a value writes it to the phone"
+        );
+        // A second pick waits for the first, and an Except list is never
+        // written from here.
+        for choice in [
+            crate::privacy::PrivacyChoice::Everyone,
+            crate::privacy::PrivacyChoice::Except,
+        ] {
+            app.actions.push(crate::model::Action::SetAccountPrivacy {
+                kind: crate::privacy::PrivacyKind::Profile,
+                choice,
+            });
+        }
+        app.actions.push(crate::model::Action::SetAccountPrivacy {
+            kind: crate::privacy::PrivacyKind::About,
+            choice: crate::privacy::PrivacyChoice::Except,
+        });
+        render(&mut app, &ctx);
+        assert!(
+            !app.backend
+                .take_demo_commands()
+                .iter()
+                .any(|command| matches!(
+                    command,
+                    crate::backend::Command::SetAccountPrivacy { .. }
+                )),
+            "nothing else is written"
+        );
+    }
+
+    #[test]
+    fn opening_settings_reads_account_privacy_again() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.actions
+            .push(crate::model::Action::Open(crate::model::Page::Settings));
+        render(&mut app, &ctx);
+        assert!(
+            app.backend
+                .take_demo_commands()
+                .iter()
+                .any(|command| matches!(command, crate::backend::Command::FetchAccountPrivacy))
+        );
+    }
+
+    #[test]
+    fn account_privacy_fetch_fills_the_rows() {
+        let mut app = app();
+        app.account_privacy = crate::privacy::Snapshot::default();
+        app.account_privacy.apply_fetch(
+            vec![(
+                crate::privacy::PrivacyKind::LastSeen,
+                crate::privacy::PrivacyChoice::Nobody,
+            )],
+            false,
+        );
+        assert_eq!(
+            app.account_privacy
+                .get(crate::privacy::PrivacyKind::LastSeen),
+            Some(crate::privacy::PrivacyChoice::Nobody)
+        );
+        assert!(app.account_privacy.loaded);
     }
 
     #[test]

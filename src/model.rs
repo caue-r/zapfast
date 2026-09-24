@@ -1399,6 +1399,11 @@ pub enum Action {
     ReloadThemes,
     OpenThemesFolder,
     SettingsChanged,
+    /// Writes one WhatsApp account privacy category on the phone.
+    SetAccountPrivacy {
+        kind: crate::privacy::PrivacyKind,
+        choice: crate::privacy::PrivacyChoice,
+    },
     /// Registers or removes the login entry that starts ZapFast in the tray.
     SetStartWithSystem(bool),
     /// Sets the sound for mentions and replies to us (`true`) or for

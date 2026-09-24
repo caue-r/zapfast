@@ -222,6 +222,8 @@ pub struct App {
     pub presence: HashMap<String, Presence>,
     /// Whether account privacy disables direct-chat read receipts.
     pub account_receipts_off: bool,
+    /// Last account privacy snapshot from the phone.
+    pub account_privacy: crate::privacy::Snapshot,
     /// Receipts of the message whose "Message info" is open.
     pub message_receipts: Option<crate::model::MessageReceipts>,
     /// The group message the backend is following receipts for.
@@ -606,6 +608,7 @@ impl App {
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
+            account_privacy: crate::privacy::Snapshot::default(),
             message_receipts: None,
             receipts_watch: None,
             invite: None,
@@ -1894,6 +1897,29 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::AccountPrivacy { values, failed } => {
+                    self.account_privacy.apply_fetch(values, failed);
+                    // The account value wins over the local switch: it is what
+                    // the phone and the other linked devices enforce.
+                    if let Some(choice) = self
+                        .account_privacy
+                        .get(crate::privacy::PrivacyKind::ReadReceipts)
+                    {
+                        self.account_receipts_off =
+                            choice != crate::privacy::PrivacyChoice::Everyone;
+                    }
+                }
+                Event::AccountPrivacySaved { kind } => {
+                    // A confirmation nothing waits for belongs to an account
+                    // that has since been unlinked.
+                    if self.account_privacy.finish_set(kind)
+                        && kind == crate::privacy::PrivacyKind::ReadReceipts
+                    {
+                        self.account_receipts_off = self.account_privacy.get(kind)
+                            != Some(crate::privacy::PrivacyChoice::Everyone);
+                    }
+                }
+                Event::AccountPrivacyFailed { kind } => self.account_privacy.fail_set(kind),
                 Event::PinLimit(limit) => self.pin_limit = limit,
                 Event::Receipts(receipts) => {
                     // A late answer for a dialog that has since closed is stale.
@@ -2078,6 +2104,8 @@ impl App {
                 self.conversations.clear();
                 self.contacts.clear();
                 self.avatars.clear();
+                self.account_privacy = crate::privacy::Snapshot::default();
+                self.account_receipts_off = false;
                 self.open_chat = None;
                 // Unsent text belongs to the account that was unlinked.
                 self.drafts.clear();
@@ -3006,6 +3034,11 @@ impl App {
         match action {
             Action::Open(page) => {
                 let opens_chats = page == Page::Chats;
+                // Privacy can change on the phone at any time, and nothing
+                // announces it: read it again whenever Settings opens.
+                if page == Page::Settings && self.page != Page::Settings && self.is_connected() {
+                    self.backend.send(Command::FetchAccountPrivacy);
+                }
                 self.page = page;
                 self.dialog = None;
                 self.emoji_start = None;
@@ -4195,6 +4228,17 @@ impl App {
                 self.mark_settings_dirty();
             }
             Action::SettingsChanged => self.mark_settings_dirty(),
+            Action::SetAccountPrivacy { kind, choice } => {
+                // The value lives on the phone: nothing is written without a
+                // connection and a snapshot to write against.
+                if self.is_connected()
+                    && self.account_privacy.editable()
+                    && self.account_privacy.begin_set(kind, choice)
+                {
+                    self.backend
+                        .send(Command::SetAccountPrivacy { kind, choice });
+                }
+            }
             Action::SetNotificationSound { mention, sound } => {
                 if mention {
                     self.settings.mention_sound = sound;
