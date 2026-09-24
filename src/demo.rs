@@ -2148,6 +2148,11 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     .join("\n");
                 app.focus_composer = true;
             }
+            "composer-tools" => {
+                app.open_chat = Some(SAMPLES[0].id.to_owned());
+                app.composer_tools_open = true;
+                app.focus_composer = true;
+            }
             "mention" => {
                 let group = SAMPLES[1].id;
                 app.open_chat = Some(group.to_owned());
@@ -3751,6 +3756,7 @@ mod tests {
             "sticker-maker",
             "sticker-pack-view",
             "typing",
+            "composer-tools",
             "mention",
             "emoji-complete",
             "typers",
@@ -6374,7 +6380,7 @@ mod tests {
         assert_eq!(
             ring(&ctx),
             Some(field.rect),
-            "input focus stays inside the field"
+            "input focus outlines the composer's rounded field"
         );
         assert_eq!(
             ctx.data(
@@ -6484,8 +6490,6 @@ mod tests {
         }
         assert_eq!(focused_stop(&ctx), Some(crate::ui::focus::Stop::Attach));
         assert!(ring(&ctx).is_some());
-        frame_sized(&mut app, &ctx, 780.0, tab());
-        assert_eq!(focused_stop(&ctx), Some(crate::ui::focus::Stop::Poll));
         frame_with(
             &mut app,
             &ctx,
@@ -6497,7 +6501,181 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             }],
         );
-        assert_eq!(app.dialog, Some(crate::model::Dialog::CreatePoll(group)));
+        assert!(
+            app.composer_tools_open,
+            "Enter opens the composer tools menu"
+        );
+    }
+
+    /// Plus, emoji, the first line of text and send or record share the
+    /// rounded field's vertical centre; a longer draft keeps them on its
+    /// last line.
+    #[test]
+    fn composer_controls_share_the_fields_vertical_centre() {
+        use crate::ui::focus::Stop;
+        let centre = |ctx: &egui::Context, stop: Stop| {
+            let id = crate::ui::focus::stops(ctx)
+                .into_iter()
+                .find(|(found, _)| *found == stop)
+                .map(|(_, id)| id)
+                .unwrap_or_else(|| panic!("{stop:?} is drawn"));
+            ctx.read_response(id).unwrap().rect.center().y
+        };
+        let measure = |app: &mut App, ctx: &egui::Context| {
+            for _ in 0..3 {
+                frame_sized(app, ctx, 780.0, Vec::new());
+            }
+            let pill = ctx
+                .data(|data| {
+                    data.get_temp::<egui::Rect>(crate::ui::conversation::composer_pill_id())
+                })
+                .expect("the composer is drawn");
+            let text = ctx
+                .read_response(egui::Id::new("composer-text"))
+                .unwrap()
+                .rect;
+            (
+                pill,
+                text,
+                [Stop::Attach, Stop::Emoji, Stop::Send].map(|stop| centre(ctx, stop)),
+            )
+        };
+        for (draft, hints) in [("", false), ("A synthetic draft", false), ("", true)] {
+            let mut app = app();
+            app.settings.show_shortcut_hints = hints;
+            app.composer = draft.into();
+            let ctx = egui::Context::default();
+            app.attach(&ctx);
+            render(&mut app, &ctx);
+            let (pill, text, controls) = measure(&mut app, &ctx);
+            let middle = pill.center().y;
+            assert!(
+                (text.center().y - middle).abs() <= 1.0,
+                "text {} vs field {middle} ({draft:?})",
+                text.center().y
+            );
+            for (stop, y) in [Stop::Attach, Stop::Emoji, Stop::Send].iter().zip(controls) {
+                assert!(
+                    (y - middle).abs() <= 1.0,
+                    "{stop:?} {y} vs field {middle} ({draft:?})"
+                );
+            }
+        }
+        // Three lines: the controls stay centred on the last line.
+        let mut app = app();
+        app.composer = "one\ntwo\nthree".into();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let (pill, text, controls) = measure(&mut app, &ctx);
+        assert!(pill.height() > 80.0, "the field grew: {pill:?}");
+        let line = text.height() / 3.0;
+        let last = text.bottom() - line / 2.0;
+        for (stop, y) in [Stop::Attach, Stop::Emoji, Stop::Send].iter().zip(controls) {
+            assert!((y - last).abs() <= 1.0, "{stop:?} {y} vs last line {last}");
+        }
+    }
+
+    #[test]
+    fn the_plus_menu_sends_files_or_creates_a_poll_and_closes() {
+        let click = |app: &mut App, ctx: &egui::Context, pos: egui::Pos2| {
+            let press = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            frame_with(app, ctx, vec![egui::Event::PointerMoved(pos), press(true)]);
+            frame_with(app, ctx, vec![press(false)]);
+            render(app, ctx);
+        };
+        let plus = |ctx: &egui::Context| {
+            let id = crate::ui::focus::stops(ctx)
+                .into_iter()
+                .find(|(stop, _)| *stop == crate::ui::focus::Stop::Attach)
+                .map(|(_, id)| id)
+                .expect("the plus button is a tab stop");
+            (id, ctx.read_response(id).unwrap().rect.center())
+        };
+        // Row 0 sends files, row 1 creates a poll.
+        for row in [0.0, 1.0] {
+            let mut app = app();
+            app.settings.show_shortcut_hints = false;
+            let chat = app.open_chat.clone().unwrap();
+            app.backend.record_demo_commands();
+            let ctx = egui::Context::default();
+            app.attach(&ctx);
+            render(&mut app, &ctx);
+            let (id, center) = plus(&ctx);
+            click(&mut app, &ctx, center);
+            assert!(app.composer_tools_open, "the plus button opens the menu");
+            let menu = ctx
+                .memory(|memory| memory.area_rect(id.with("composer-tools")))
+                .expect("the menu is shown");
+            assert!(
+                menu.bottom() <= center.y,
+                "the menu opens above the composer"
+            );
+            let item = egui::pos2(
+                menu.center().x,
+                menu.top() + menu.height() * (1.0 + 2.0 * row) / 4.0,
+            );
+            click(&mut app, &ctx, item);
+            assert!(
+                !app.composer_tools_open,
+                "choosing an entry closes the menu"
+            );
+            let commands = app.backend.take_demo_commands();
+            let picked = commands.iter().any(
+                |command| matches!(command, crate::backend::Command::PickFiles(id) if *id == chat),
+            );
+            if row == 0.0 {
+                assert!(picked, "Send files opens the file picker");
+                assert_eq!(app.dialog, None);
+            } else {
+                assert!(!picked);
+                assert_eq!(app.dialog, Some(crate::model::Dialog::CreatePoll(chat)));
+            }
+        }
+    }
+
+    #[test]
+    fn the_plus_menu_closes_for_the_picker_and_is_hidden_while_editing() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.actions
+            .push(crate::model::Action::SetComposerTools(true));
+        render(&mut app, &ctx);
+        assert!(app.composer_tools_open);
+        app.actions.push(crate::model::Action::TogglePicker(
+            crate::model::PickerTab::Emoji,
+        ));
+        render(&mut app, &ctx);
+        assert!(!app.composer_tools_open, "the emoji picker closes the menu");
+        assert!(app.picker.is_some());
+        app.actions
+            .push(crate::model::Action::SetComposerTools(true));
+        render(&mut app, &ctx);
+        assert!(app.picker.is_none(), "the menu closes the emoji picker");
+        let own = app.conversations[app.open_chat.as_deref().unwrap()]
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.from_me && matches!(message.content, Content::Text { .. }))
+            .map(|message| message.id.clone())
+            .expect("an own text message to edit");
+        assert!(app.composer_tools_open);
+        app.actions.push(crate::model::Action::Edit(own));
+        render(&mut app, &ctx);
+        assert!(app.editing.is_some());
+        assert!(!app.composer_tools_open, "editing closes the menu");
+        assert!(
+            !crate::ui::focus::stops(&ctx)
+                .iter()
+                .any(|(stop, _)| *stop == crate::ui::focus::Stop::Attach),
+            "editing hides the plus button"
+        );
     }
 
     fn focused_stop(ctx: &egui::Context) -> Option<crate::ui::focus::Stop> {
@@ -6611,7 +6789,6 @@ mod tests {
                 Stop::Composer,
                 Stop::Send,
                 Stop::Attach,
-                Stop::Poll,
                 Stop::Emoji,
                 Stop::ChatSearch,
                 Stop::Profile,
@@ -6730,7 +6907,6 @@ mod tests {
                         Stop::Composer,
                         Stop::Send,
                         Stop::Attach,
-                        Stop::Poll,
                         Stop::Emoji,
                         Stop::ChatSearch,
                         Stop::Sidebar
