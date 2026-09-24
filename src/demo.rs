@@ -4353,6 +4353,80 @@ mod tests {
         assert!(egui::Popup::is_id_open(&ctx, popup), "and it stays open");
     }
 
+    #[test]
+    fn ctrl_click_selects_messages_and_shift_click_takes_the_ones_between() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        for _ in 0..3 {
+            render(&mut app, &ctx);
+        }
+        let chat = sample_ids()[0].to_owned();
+        // A click in the bubble's margin, beside its time: the text and
+        // media inside take clicks for themselves.
+        let click = |app: &mut App, message: &str, modifiers: egui::Modifiers| {
+            let id = crate::ui::conversation::bubble_id(&chat, message);
+            let rect = ctx
+                .data(|data| data.get_temp::<egui::Rect>(id.with("rect")))
+                .unwrap_or_else(|| panic!("{message} is on screen"));
+            let pos = rect.right_bottom() - egui::vec2(5.0, 2.0);
+            let button = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers,
+            };
+            frame_with(
+                app,
+                &ctx,
+                vec![
+                    egui::Event::ModifiersChanged(modifiers),
+                    egui::Event::PointerMoved(pos),
+                    button(true),
+                ],
+            );
+            frame_with(app, &ctx, vec![button(false)]);
+            frame_with(
+                app,
+                &ctx,
+                vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)],
+            );
+        };
+        let selected = |app: &App| app.selection.as_ref().map(|(_, ids)| ids.clone());
+        click(&mut app, "ada-doc", egui::Modifiers::NONE);
+        assert_eq!(selected(&app), None, "a plain click selects nothing");
+        click(&mut app, "ada-doc", egui::Modifiers::COMMAND);
+        assert_eq!(selected(&app), Some(vec!["ada-doc".to_owned()]));
+        click(&mut app, "ada-reply", egui::Modifiers::SHIFT);
+        assert_eq!(
+            selected(&app),
+            Some(
+                ["ada-doc", "ada-voice", "you-voice", "ada-reply"]
+                    .map(str::to_owned)
+                    .to_vec()
+            ),
+            "Shift-click takes every message between"
+        );
+        click(&mut app, "ada-voice", egui::Modifiers::NONE);
+        assert_eq!(
+            selected(&app),
+            Some(
+                ["ada-doc", "you-voice", "ada-reply"]
+                    .map(str::to_owned)
+                    .to_vec()
+            ),
+            "a click while selecting leaves one out"
+        );
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        frame_with(&mut app, &ctx, Vec::new());
+        assert_eq!(selected(&app), None, "Escape ends the selection");
+        assert_eq!(app.open_chat, Some(chat), "and leaves the chat open");
+    }
+
     /// One frame with AccessKit on; returns (label, role, centre) per node.
     fn accessible_nodes(
         app: &mut App,

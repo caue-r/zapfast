@@ -2986,8 +2986,10 @@ fn bubble_frame(
     if reacting && !egui::Popup::is_id_open(ui.ctx(), bubble_id.with("popup")) {
         actions.push(Action::ClosePicker);
     }
-    // Store this frame's final rect for later scrolling.
-    inner.response
+    // This frame's final rect, for later scrolling, with the bubble's own
+    // clicks: the frame alone only senses hover, so a Ctrl-click to select
+    // or a click to add to a selection would never register.
+    inner.response.union(bubble)
 }
 
 /// Minimum shared width for cards inside message bubbles.
