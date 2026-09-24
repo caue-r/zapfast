@@ -4614,6 +4614,60 @@ mod tests {
         );
     }
 
+    /// A message scrolled up under the chat header is hidden there, so a
+    /// right-click on the header does not open that message's menu.
+    #[test]
+    fn right_click_on_the_header_does_not_reach_a_message_under_it() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let viewport = app
+            .selection_view
+            .lock()
+            .unwrap()
+            .expect("the transcript was drawn");
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let (id, bubble) = app.conversations[&chat]
+            .messages
+            .iter()
+            .map(|message| crate::ui::conversation::bubble_id(&chat, &message.id))
+            .find_map(|id| {
+                let rect = ctx.data(|data| data.get_temp::<egui::Rect>(id.with("rect")))?;
+                (rect.top() < viewport.top() - 8.0 && rect.bottom() > viewport.top() + 8.0)
+                    .then_some((id, rect))
+            })
+            .expect("a message runs under the header");
+        let right_click = |app: &mut App, pos: egui::Pos2| {
+            let press = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Secondary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            frame_with(app, &ctx, vec![egui::Event::PointerMoved(pos), press(true)]);
+            frame_with(app, &ctx, vec![press(false)]);
+            frame_with(app, &ctx, Vec::new());
+        };
+        let hidden = egui::pos2(bubble.center().x, viewport.top() - 4.0);
+        assert!(bubble.contains(hidden));
+        right_click(&mut app, hidden);
+        assert!(
+            !egui::Popup::is_id_open(&ctx, id.with("popup")),
+            "the header's right-click opened the hidden message's menu"
+        );
+
+        // The visible part of the same message still opens it.
+        right_click(
+            &mut app,
+            egui::pos2(bubble.center().x, viewport.top() + 4.0),
+        );
+        assert!(
+            egui::Popup::is_id_open(&ctx, id.with("popup")),
+            "a right-click on the visible part opens the menu"
+        );
+    }
+
     /// A location in our own bubble keeps one width from frame to frame
     /// instead of flickering, and stays a card rather than spanning the chat.
     #[test]
