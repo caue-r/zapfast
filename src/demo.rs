@@ -1485,6 +1485,32 @@ fn video_sample(app: &mut App, play: Option<&str>) {
     }
 }
 
+/// The search pane over the sample chat with the most matches for
+/// `query`, listing them newest first as the archive would.
+fn chat_search_sample(app: &mut App, query: &str) {
+    let matches = |conversation: &crate::app::Conversation| -> Vec<crate::model::Message> {
+        conversation
+            .messages
+            .iter()
+            .rev()
+            .filter(|message| message.text_matching(query).is_some())
+            .cloned()
+            .collect()
+    };
+    let Some((chat, hits)) = app
+        .conversations
+        .iter()
+        .map(|(chat, conversation)| (chat.clone(), matches(conversation)))
+        .max_by_key(|(chat, hits)| (hits.len(), std::cmp::Reverse(chat.clone())))
+    else {
+        return;
+    };
+    app.open_chat = Some(chat);
+    app.chat_search_open = true;
+    app.chat_search = query.into();
+    app.chat_search_hits = hits;
+}
+
 /// Three local labels worn by some of the sample chats.
 fn labels_sample(app: &mut App) {
     let label = |id: &str, name: &str, color_hex: &str, created_at| crate::model::Label {
@@ -2260,6 +2286,23 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             "labels-dialog" => {
                 labels_sample(app);
                 app.dialog = Some(Dialog::Labels);
+            }
+            "chat-search" => chat_search_sample(app, "engine"),
+            // Right-to-left previews with emoji.
+            "chat-search-rtl" => chat_search_sample(app, "שלום"),
+            // The same pane with the day filter open.
+            "chat-search-day" => {
+                chat_search_sample(app, "engine");
+                app.chat_search_day = app
+                    .chat_search_hits
+                    .first()
+                    .and_then(|hit| crate::util::day_key(hit.timestamp));
+                if let Some(day) = app.chat_search_day {
+                    app.chat_search_month = day;
+                    app.chat_search_hits
+                        .retain(|hit| crate::util::day_key(hit.timestamp) == Some(day));
+                }
+                app.chat_search_calendar = true;
             }
             "unread" => app.chat_filter = crate::model::ChatFilter::Unread,
             "private" => app.chat_filter = crate::model::ChatFilter::Private,
@@ -3688,6 +3731,9 @@ mod tests {
             "new-contact",
             "light",
             "archived",
+            "chat-search",
+            "chat-search-day",
+            "chat-search-rtl",
             "unread",
             "private",
             "favorites",
@@ -6567,6 +6613,7 @@ mod tests {
                 Stop::Attach,
                 Stop::Poll,
                 Stop::Emoji,
+                Stop::ChatSearch,
                 Stop::Profile,
                 Stop::Sidebar,
                 Stop::NewChat,
@@ -6648,7 +6695,15 @@ mod tests {
     #[test]
     fn main_tab_cycle_tracks_hidden_and_read_only_controls() {
         use crate::ui::focus::Stop;
-        for page in ["nosidebar", "rail", "empty", "channel", "search", "chat"] {
+        for page in [
+            "nosidebar",
+            "rail",
+            "empty",
+            "channel",
+            "search",
+            "chat",
+            "chat-search",
+        ] {
             let mut app = app();
             apply_flags(&mut app, Some(page));
             let ctx = egui::Context::default();
@@ -6677,6 +6732,7 @@ mod tests {
                         Stop::Attach,
                         Stop::Poll,
                         Stop::Emoji,
+                        Stop::ChatSearch,
                         Stop::Sidebar
                     ]
                 );

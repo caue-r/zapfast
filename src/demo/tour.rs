@@ -597,6 +597,187 @@ mod tests {
     }
 
     #[test]
+    fn the_chat_search_pane_lists_hits_and_opens_one() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        let open = super::super::sample_ids()[0].to_owned();
+        let other = super::super::sample_ids()[1].to_owned();
+        app.actions.push(crate::model::Action::OpenChat(open));
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        app.actions.push(crate::model::Action::OpenChatSearch);
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        app.chat_search = "engine".into();
+        // Hits from another chat, so their text is painted only in the pane
+        // and the click lands on the row rather than on a bubble.
+        app.chat_search_hits = app
+            .conversations
+            .get(&other)
+            .map(|conversation| conversation.messages.clone())
+            .unwrap_or_default();
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        // The pane's copy is translated, and the interface language follows
+        // the system when Settings carries no choice of its own.
+        let title = crate::i18n::gettext(app.locale, "Search messages").to_string();
+        assert!(tour.labels.contains_key(&title), "the pane names itself");
+        let hit = app.chat_search_hits.first().cloned().expect("a hit");
+        // The row previews the line the query matched, not the message's first
+        // line, so that is the text the click lands on.
+        let preview = hit.text_matching("engine").unwrap_or_else(|| hit.summary());
+        click(&mut app, &mut tour, &ctx, &preview);
+        assert_eq!(
+            app.open_chat.as_deref(),
+            Some(hit.chat.as_str()),
+            "clicking a hit opens the chat it belongs to"
+        );
+        // The jump is consumed by the frame that scrolls to it, so the flash
+        // it leaves behind is what says the message was the one asked for.
+        assert_eq!(
+            app.jump_highlight
+                .as_ref()
+                .map(|jump| (jump.chat.as_str(), jump.message.as_str())),
+            Some((hit.chat.as_str(), hit.id.as_str())),
+            "and brings that message into view"
+        );
+    }
+
+    #[test]
+    fn the_keyboard_walks_the_chat_search_results_and_escape_closes_the_pane() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        let open = super::super::sample_ids()[0].to_owned();
+        app.actions
+            .push(crate::model::Action::OpenChat(open.clone()));
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        app.actions.push(crate::model::Action::OpenChatSearch);
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        app.chat_search = "e".into();
+        // Newest first, as the archive answers.
+        app.chat_search_hits = app.conversations[&open]
+            .messages
+            .iter()
+            .rev()
+            .take(3)
+            .cloned()
+            .collect();
+        assert_eq!(app.chat_search_hits.len(), 3);
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        let field = egui::Id::new("chat-message-search");
+        assert!(ctx.memory(|memory| memory.has_focus(field)));
+        let key = |key: egui::Key| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::ArrowDown)]);
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::ArrowDown)]);
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::ArrowDown)]);
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::ArrowDown)]);
+        assert_eq!(app.chat_search_selected, Some(2), "stops at the last");
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::ArrowUp)]);
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::Enter)]);
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        let second = app.chat_search_hits[1].id.clone();
+        assert_eq!(
+            app.jump_highlight
+                .as_ref()
+                .map(|jump| jump.message.as_str()),
+            Some(second.as_str()),
+            "Enter jumps to the result reached"
+        );
+        assert!(
+            ctx.memory(|memory| memory.has_focus(field)),
+            "and the field keeps the keyboard for the next one"
+        );
+        assert!(app.chat_search_open);
+        frame(&mut app, &mut tour, &ctx, vec![key(egui::Key::Escape)]);
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        assert!(!app.chat_search_open, "Escape closes the pane");
+        assert_eq!(
+            app.open_chat.as_deref(),
+            Some(open.as_str()),
+            "not the chat"
+        );
+        assert!(app.chat_search.is_empty());
+    }
+
+    #[test]
+    fn a_narrow_window_lays_the_search_pane_over_the_chat_and_folds_it_on_a_pick() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        let narrow = |app: &mut App, tour: &mut Tour, events: Vec<Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(760.0, 600.0))),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                app.background_frame(&ctx);
+                app.frame_ui(ui);
+                tour.observe(app, &ctx);
+            });
+            output.textures_delta.clear();
+        };
+        let open = super::super::sample_ids()[0].to_owned();
+        app.actions
+            .push(crate::model::Action::OpenChat(open.clone()));
+        narrow(&mut app, &mut tour, Vec::new());
+        app.actions.push(crate::model::Action::OpenChatSearch);
+        narrow(&mut app, &mut tour, Vec::new());
+        app.chat_search = "e".into();
+        app.chat_search_hits = app.conversations[&open]
+            .messages
+            .iter()
+            .rev()
+            .take(2)
+            .cloned()
+            .collect();
+        narrow(&mut app, &mut tour, Vec::new());
+        // The chat list leaves too little room to share, so the pane lies
+        // over the conversation rather than squeezing it.
+        let overlay = ctx.memory(|memory| {
+            memory
+                .layer_ids()
+                .any(|layer| layer.id == egui::Id::new("chat-search-overlay"))
+        });
+        assert!(overlay, "the pane is laid over the chat");
+        let enter = Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        narrow(&mut app, &mut tour, vec![enter]);
+        narrow(&mut app, &mut tour, Vec::new());
+        let newest = app.chat_search_hits[0].id.clone();
+        assert_eq!(
+            app.jump_highlight
+                .as_ref()
+                .map(|jump| jump.message.as_str()),
+            Some(newest.as_str())
+        );
+        assert!(!app.chat_search_open, "folded so the message shows");
+        assert_eq!(app.chat_search, "e", "with the search kept for later");
+        app.actions.push(crate::model::Action::OpenChatSearch);
+        narrow(&mut app, &mut tour, Vec::new());
+        assert!(app.chat_search_open);
+        assert_eq!(app.chat_search_hits.len(), 2, "as it was");
+    }
+
+    #[test]
     fn leaving_is_offered_for_a_group_and_for_a_channel() {
         for (index, leave, title, archive) in [
             (
