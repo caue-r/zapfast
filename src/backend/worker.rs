@@ -467,6 +467,7 @@ pub async fn run(
         privacy_recovering: false,
         privacy_generation: 0,
         privacy_retry: Instant::now(),
+        withheld_pages: Vec::new(),
         dirs,
         events,
         commands,
@@ -669,6 +670,16 @@ impl wa_events::EventHandler for UiEvents {
     }
 }
 
+/// A transcript read whose answer was withheld with the rest of the private
+/// content, to be read again once content is shown.
+#[derive(Clone, Debug, PartialEq)]
+enum WithheldPage {
+    /// `Command::LoadChat`.
+    Page(ChatId, Option<super::PageKey>),
+    /// `Command::LoadUntil`.
+    Until(ChatId, String, super::PageKey),
+}
+
 struct Worker {
     /// Private content may reach the UI.
     privacy_ready: bool,
@@ -683,6 +694,10 @@ struct Worker {
     privacy_recovering: bool,
     privacy_generation: u64,
     privacy_retry: Instant,
+    /// Transcript pages asked for while private content was withheld. Their
+    /// answers never reached the interface, which still waits for them, so
+    /// they are read again once content is shown (#180).
+    withheld_pages: Vec<WithheldPage>,
     read_sync: ReadSync,
     /// Sending favorite chats to the phone, and reading its list once.
     favorite_chats: favorite_chats::FavoriteChats,
@@ -1583,6 +1598,14 @@ impl Worker {
         self.privacy_ready = true;
         self.load_state();
         self.emit(Event::Syncing(self.syncing));
+        // Answer the reads made while content was withheld, now that the
+        // chat list they belong to has been sent.
+        for page in std::mem::take(&mut self.withheld_pages) {
+            match page {
+                WithheldPage::Page(chat, before) => self.send_page(&chat, before),
+                WithheldPage::Until(chat, id, before) => self.load_until(chat, id, before),
+            }
+        }
     }
 
     async fn stop_bot(&mut self) {
@@ -2448,6 +2471,8 @@ impl Worker {
         self.privacy_ready = false;
         self.privacy_confirmed = false;
         self.privacy_snapshot = false;
+        // Reads for the unlinked account must not be answered for the next.
+        self.withheld_pages.clear();
         self.privacy_reveal_at = None;
         self.privacy_attempts = 0;
         self.privacy_warned = false;
@@ -5485,28 +5510,7 @@ impl Worker {
     }
 
     fn load_chat(&mut self, chat: ChatId, before: Option<super::PageKey>) {
-        match self.archive.messages(
-            &chat,
-            before.as_ref().map(|(time, id)| (*time, id.as_str())),
-            PAGE + 1,
-        ) {
-            Ok(mut messages) => {
-                let complete = messages.len() <= PAGE;
-                if !complete {
-                    messages.remove(0);
-                }
-                for message in &mut messages {
-                    self.polish(message);
-                }
-                self.emit(Event::Messages {
-                    chat: chat.clone(),
-                    messages,
-                    older: before.is_some(),
-                    complete,
-                });
-            }
-            Err(error) => self.emit(Event::Error(format!("Could not read the chat: {error}"))),
-        }
+        self.send_page(&chat, before.clone());
         if before.is_none() && ChatKind::from_id(&chat) == ChatKind::Group {
             // Force group metadata when opening a group.
             self.request_group_info(&chat, false);
@@ -6010,7 +6014,57 @@ impl Worker {
         }
     }
 
+    /// Sends a page of the archive, the newest one or the one before `before`.
+    fn send_page(&mut self, chat: &ChatId, before: Option<super::PageKey>) {
+        if self.withhold(WithheldPage::Page(chat.clone(), before.clone())) {
+            return;
+        }
+        match self.archive.messages(
+            chat,
+            before.as_ref().map(|(time, id)| (*time, id.as_str())),
+            PAGE + 1,
+        ) {
+            Ok(mut messages) => {
+                let complete = messages.len() <= PAGE;
+                if !complete {
+                    messages.remove(0);
+                }
+                for message in &mut messages {
+                    self.polish(message);
+                }
+                self.emit(Event::Messages {
+                    chat: chat.clone(),
+                    messages,
+                    older: before.is_some(),
+                    complete,
+                });
+            }
+            Err(error) => self.emit(Event::Error(format!("Could not read the chat: {error}"))),
+        }
+    }
+
+    /// Keeps a transcript read for later while private content is withheld.
+    /// Its answer would be dropped, and the interface, having asked once,
+    /// would wait for it forever: a chat opened then stayed empty until a new
+    /// message arrived (#180).
+    fn withhold(&mut self, page: WithheldPage) -> bool {
+        if self.privacy_ready {
+            return false;
+        }
+        if !self.withheld_pages.contains(&page) {
+            self.withheld_pages.push(page);
+        }
+        true
+    }
+
     fn load_until(&mut self, chat: ChatId, id: String, before: super::PageKey) {
+        if self.withhold(WithheldPage::Until(
+            chat.clone(),
+            id.clone(),
+            before.clone(),
+        )) {
+            return;
+        }
         let Ok(Some(target)) = self.archive.message(&chat, &id) else {
             self.emit(Event::Messages {
                 chat: chat.clone(),
@@ -8924,6 +8978,60 @@ mod tests {
         assert!(chats[0].locked);
     }
 
+    /// A chat opened while lock state was still being recovered asked for its
+    /// messages once; the answer was withheld, and the interface never asked
+    /// again, so the chat stayed empty until a new message came in (#180).
+    #[test]
+    fn transcript_reads_withheld_during_privacy_recovery_are_answered_once_shown() {
+        let (mut worker, events, _, _) = receipt_tests::worker();
+        const GROUP: &str = "120363000000000001@g.us";
+        worker.archive.ensure_chat(GROUP, "Fixture group").unwrap();
+        for (id, timestamp) in [("first", 100), ("second", 200), ("third", 300)] {
+            let row = Message {
+                chat: GROUP.into(),
+                ..receipt_tests::own_message(id, timestamp)
+            };
+            worker.archive.insert_message(&row, None).unwrap();
+        }
+        unconfirmed(&mut worker);
+        worker.load_chat(GROUP.into(), None);
+        worker.load_chat(GROUP.into(), Some((300, "third".into())));
+        worker.load_until(GROUP.into(), "first".into(), (200, "second".into()));
+        // Asking twice keeps one read.
+        worker.load_chat(GROUP.into(), None);
+        assert!(
+            !events
+                .try_iter()
+                .any(|event| matches!(event, Event::Messages { .. })),
+            "nothing private is sent while lock state is unknown"
+        );
+        worker.preferences_recovered(0, false, false);
+        let pages: Vec<(Vec<String>, bool)> = events
+            .try_iter()
+            .filter_map(|event| match event {
+                Event::Messages {
+                    chat,
+                    messages,
+                    older,
+                    ..
+                } if chat == GROUP => Some((
+                    messages.into_iter().map(|message| message.id).collect(),
+                    older,
+                )),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            pages,
+            vec![
+                (vec!["first".into(), "second".into(), "third".into()], false),
+                (vec!["first".into(), "second".into()], true),
+                (vec!["first".into()], true),
+            ]
+        );
+        assert!(worker.withheld_pages.is_empty());
+    }
+
     #[test]
     fn failed_privacy_recovery_shows_known_state_and_keeps_retrying() {
         let (mut worker, events, _, _) = receipt_tests::worker();
@@ -9602,6 +9710,7 @@ mod receipt_tests {
             privacy_recovering: false,
             privacy_generation: 0,
             privacy_retry: Instant::now(),
+            withheld_pages: Vec::new(),
             dirs: AppDirs::under(&root),
             events,
             commands,
