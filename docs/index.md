@@ -27,7 +27,7 @@ hero:
 features:
   - icon: ⚡
     title: Lightweight
-    details: Opens in under a second and uses 150MB of RAM. No browser engine.
+    details: Opens in under a second and uses about 200MB of RAM. No browser engine.
   - icon: 🎤
     title: Voice messages
     details: Play, seek, and record voice messages in the chat. OGG/Opus support is built in.

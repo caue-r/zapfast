@@ -4,8 +4,8 @@
 with [egui](https://github.com/emilk/egui). It uses
 [whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) for the WhatsApp Web
 protocol. It runs on Linux, macOS, and Windows, links to your phone as a
-companion device, and has no browser engine. In our Linux test, it opened in
-under a second and used about 150 MB of idle RAM, compared with 1.13 GB for
+companion device, and has no browser engine. In our Linux test, it opens in
+under a second and uses about 200 MB of idle RAM, compared with 1.13 GB for
 WhatsApp Web and its Chromium processes. [See the measurements](https://zapfast.rocks/benchmarks/).
 
 ZapFast is a sibling of [Spotifast](https://spotifast.rocks),
