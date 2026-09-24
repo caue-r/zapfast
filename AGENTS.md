@@ -313,18 +313,21 @@ released, which goes out as soon as it is fixed.
 
 A release is not finished when the tag is pushed. Do these in order:
 
-1. From a clean, up-to-date `main`, bump `version` in `Cargo.toml` and update
-   `Cargo.lock` with a build. Run the full checks, commit, and push `main`.
-   Before tagging, verify the release commit is reachable from `origin/main`
-   so the binaries report the right version and the release contains the
-   canonical history.
+1. From a clean, up-to-date `main`, bump `version` in `Cargo.toml`, add the
+   release to the `<releases>` list in the Flatpak metainfo, and update
+   `Cargo.lock` with a build. Write the release notes, in the style above, to
+   `packaging/release-notes/vX.Y.Z.md`: the release workflow publishes that
+   file as the release description, and a stable tag without it fails. Link
+   screenshots at the release's asset URLs
+   (`https://github.com/crmne/zapfast/releases/download/vX.Y.Z/NAME.png`).
+   Run the full checks, commit, and push `main`. Before tagging, verify the
+   release commit is reachable from `origin/main` so the binaries report the
+   right version and the release contains the canonical history.
 2. Tag `vX.Y.Z` and push the tag. Wait for every platform build, artifact,
    and `checksums.txt`.
-3. Replace the generated GitHub notes with written release notes. Start with
-   a short summary, group user-visible changes under headings such as `New`
-   and `Fixed`, credit contributors and reporters where it helps, and end
-   with a full-changelog link comparing the previous tag. Write about what
-   changed for the user, not the commit history.
+3. Upload the screenshots to the release as assets with the names the notes
+   link, then open the published release and check the text, every image,
+   and every download link. Never leave generated placeholder notes.
 4. After the release files exist, update both `zapfast_version` in
    `docs/_config.yml` and the version menu in `docs/_data/versions.yml`.
    The menu lists only the current version, which points to `/download/`,
