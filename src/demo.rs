@@ -6568,7 +6568,8 @@ mod tests {
         app.attach(&ctx);
         render(&mut app, &ctx);
         let (pill, text, controls) = measure(&mut app, &ctx);
-        assert!(pill.height() > 80.0, "the field grew: {pill:?}");
+        // One line is 40pt tall; three clearly outgrow it.
+        assert!(pill.height() > 70.0, "the field grew: {pill:?}");
         let line = text.height() / 3.0;
         let last = text.bottom() - line / 2.0;
         for (stop, y) in [Stop::Attach, Stop::Emoji, Stop::Send].iter().zip(controls) {

@@ -779,7 +779,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     left: 8,
                     right: 8,
                     top: 0,
-                    bottom: 12,
+                    bottom: 8,
                 }),
         )
         .show(ui, |ui| {
@@ -930,22 +930,27 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             // Every control sits in a band as tall as a one-line field at the
             // bottom of the row, centred on it. The field grows to six lines
             // above that band, so the buttons stay beside its last line.
-            let button_width = COMPOSER_BUTTON_SIZE;
-            let field_margin = ((COMPOSER_LINE - line_height) / 2.0).round().max(0.0);
+            // A one-line field, like the composer before the rounded field:
+            // the text line with padding, the send button as tall as that.
+            let line = (line_height + COMPOSER_PADDING)
+                .round()
+                .max(COMPOSER_CONTROL);
+            let button_width = line;
+            let field_margin = ((line - line_height) / 2.0).round().max(0.0);
             let text_height = ui
                 .ctx()
                 .read_response(id)
                 .map(|previous| previous.rect.height())
                 .unwrap_or(line_height)
                 .clamp(line_height, line_height * 6.0);
-            let row_height = (text_height + 2.0 * field_margin).max(COMPOSER_LINE);
+            let row_height = (text_height + 2.0 * field_margin).max(line);
             let pill = composer_pill(&palette).show(ui, |ui| {
             ui.allocate_ui_with_layout(
                 vec2(ui.available_width(), row_height),
                 Layout::left_to_right(Align::Max),
                 |ui| {
                 if app.editing.is_none() {
-                    let tools = last_line(ui, |ui| theme::icon_button(
+                    let tools = last_line(ui, line, |ui| theme::icon_button(
                         ui,
                         Icon::Plus,
                         22.0,
@@ -959,7 +964,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     ))
                     .tab_stop(Stop::Attach);
                     composer_tools_menu(app, chat, &tools);
-                    let smile = last_line(ui, |ui| theme::icon_button(
+                    let smile = last_line(ui, line, |ui| theme::icon_button(
                         ui,
                         Icon::Smile,
                         22.0,
@@ -1128,7 +1133,7 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 } else {
                     (palette.surface, palette.surface_hover, palette.dim)
                 };
-                last_line(ui, |ui| if !ready && app.editing.is_none() {
+                last_line(ui, line, |ui| if !ready && app.editing.is_none() {
                     // An empty composer changes the send button to record.
                     if theme::circle_button(
                         ui,
@@ -1234,10 +1239,13 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
 
 /// Corner radius of the composer's rounded field.
 const COMPOSER_RADIUS: u8 = 24;
-/// Diameter of the composer's send and record button.
-const COMPOSER_BUTTON_SIZE: f32 = 40.0;
-/// Height of a one-line composer row; the controls are centred on it.
-const COMPOSER_LINE: f32 = 42.0;
+/// Padding around the text of a one-line composer row. The row, and the send
+/// and record button, are one text line plus this; the controls are centred
+/// on it.
+const COMPOSER_PADDING: f32 = 14.0;
+/// Height of the plus and emoji buttons: a row is never shorter, or they
+/// would stretch it and pull the text off its centre.
+const COMPOSER_CONTROL: f32 = 36.0;
 
 /// Where the composer's rounded field was drawn, for layout tests.
 pub(crate) fn composer_pill_id() -> egui::Id {
@@ -1246,13 +1254,9 @@ pub(crate) fn composer_pill_id() -> egui::Id {
 
 /// Lays out a control centred in the composer's last-line band, however
 /// tall the draft has grown, so every control shares one vertical centre.
-fn last_line<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.allocate_ui_with_layout(
-        vec2(0.0, COMPOSER_LINE),
-        Layout::left_to_right(Align::Center),
-        add,
-    )
-    .inner
+fn last_line<R>(ui: &mut egui::Ui, line: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.allocate_ui_with_layout(vec2(0.0, line), Layout::left_to_right(Align::Center), add)
+        .inner
 }
 
 /// The rounded field that holds the composer's controls, or the recorder.
@@ -1266,7 +1270,7 @@ fn composer_pill(palette: &Palette) -> Frame {
             spread: 0,
             color: Color32::from_black_alpha(31),
         })
-        .inner_margin(Margin::symmetric(8, 5))
+        .inner_margin(Margin::symmetric(8, 2))
 }
 
 /// The plus menu beside the composer: send files or create a poll.
@@ -5884,8 +5888,17 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
         Some(recorder) => (recorder.elapsed(), recorder.levels()),
         None => return,
     };
-    let button = 36.0;
-    let row_height = 42.0;
+    // As tall as the one-line composer it replaces, so the field keeps its
+    // height while recording.
+    let line_height = ui
+        .painter()
+        .layout_no_wrap("x".to_owned(), theme::regular(BODY_SIZE), palette.text)
+        .size()
+        .y;
+    let row_height = (line_height + COMPOSER_PADDING)
+        .round()
+        .max(COMPOSER_CONTROL);
+    let button = row_height;
     ui.allocate_ui_with_layout(
         vec2(ui.available_width().max(0.0), row_height),
         egui::Layout::right_to_left(egui::Align::Center),
