@@ -137,9 +137,11 @@ epaint = { git = "https://github.com/crmne/egui", rev = "6147de7b09f255190121e81
 epaint_default_fonts = { git = "https://github.com/crmne/egui", rev = "6147de7b09f255190121e8166cbb083d88cabfb2" }
 # winit 0.30.13 plus Wayland `Occluded` events for the xdg-shell suspended
 # state, so a hidden window stops painting instead of blocking on vsync.
-# Shared with Spotifast and proposed upstream as rust-windowing/winit#4709;
-# drop the fork when a winit release includes it.
-winit = { git = "https://github.com/crmne/winit", rev = "c8df61a52b8b563e1bb65e0f1d8630289d1c1bd6" }
+# Shared with Spotifast and proposed upstream as rust-windowing/winit#4709.
+# Also file drag and drop on Wayland through the data device (#178), which
+# upstream only has in 0.31's new drag-and-drop API (winit#4571). Drop the
+# fork when ZapFast moves to a winit release with both.
+winit = { git = "https://github.com/crmne/winit", rev = "05fbaf7a757b7657f717c07761d8ff4db81fa426" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 notify = "8.2"
