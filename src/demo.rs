@@ -7621,3 +7621,107 @@ mod long_chat_tests {
         );
     }
 }
+
+/// A picture whose file does not have the proportions its message states
+/// takes one height on screen and another while scrolled away. At the edge of
+/// a transcript held at its end, that must not shake the chat (#179).
+#[cfg(test)]
+mod picture_edge_tests {
+    use super::tests::app;
+    use super::*;
+    use crate::model::{Action, Content};
+
+    /// Opens a chat of text rows with an undimensioned portrait picture
+    /// `after` rows from the end, in a window `height` points tall.
+    fn chat_with_picture(after: i64, height: f32) -> Vec<(String, egui::Pos2)> {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.typing.clear();
+        let (photo, _) = sample_files(&app);
+        let chat = SAMPLES[0].id.to_owned();
+        let conversation = app.conversations.get_mut(&chat).unwrap();
+        let template = conversation.messages.last().unwrap().clone();
+        conversation.messages.clear();
+        let rows = 30 + 1 + after;
+        for n in 0..rows {
+            let mut row = template.clone();
+            row.id = format!("edge-{n}");
+            row.from_me = n % 3 == 0;
+            row.reactions.clear();
+            row.quoted = None;
+            row.timestamp = template.timestamp - (rows - n) * 60;
+            let words: Vec<&str> =
+                std::iter::repeat_n("lorem", 3 + (n * 7 % 20) as usize).collect();
+            row.content = Content::text(format!("Row {n} {}", words.join(" ")));
+            if n == 30 {
+                // The sample photo is portrait; the message gives no size.
+                let mut picture = media("image/jpeg", 402_113, None, None);
+                picture.path = Some(photo.clone());
+                row.content = Content::Image {
+                    caption: Some("Row 30 picture".into()),
+                    media: picture,
+                };
+            }
+            conversation.messages.push(row);
+        }
+        for row in &mut app.chats {
+            row.unread = 0;
+        }
+        app.open_chat = None;
+        app.actions.push(Action::OpenChat(chat));
+        let mut time = 0.0;
+        let mut frame = |app: &mut App| {
+            time += 1.0 / 60.0;
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1180.0, height),
+                    )),
+                    time: Some(time),
+                    ..Default::default()
+                },
+                |ui| {
+                    let ctx = ui.ctx().clone();
+                    app.background_frame(&ctx);
+                    app.frame_ui(ui);
+                },
+            );
+            output.textures_delta.clear();
+            let view = app.selection_view.lock().unwrap().unwrap();
+            output
+                .shapes
+                .iter()
+                .filter(|clipped| clipped.clip_rect == view)
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some((text.galley.text().to_owned(), text.pos)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        // The picture decodes on a loader thread.
+        for _ in 0..30 {
+            frame(&mut app);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let settled = frame(&mut app);
+        for _ in 0..6 {
+            assert_eq!(
+                frame(&mut app),
+                settled,
+                "the transcript moved without input ({after} rows below, {height} tall)"
+            );
+        }
+        settled
+    }
+
+    #[test]
+    fn a_picture_across_the_top_edge_keeps_a_chat_at_its_end_still() {
+        // Somewhere in this range the picture straddles the top edge.
+        for height in (480..=720).step_by(20) {
+            let shown = chat_with_picture(2, height as f32);
+            assert!(!shown.is_empty(), "the chat shows its end ({height} tall)");
+        }
+    }
+}

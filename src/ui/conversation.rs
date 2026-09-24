@@ -4984,7 +4984,21 @@ fn picture(
         // A row that is off screen only reserves its space. Loading the image
         // decodes it and uploads a texture, so it waits until it is scrolled
         // into view, and `image_cache` can release it once it leaves again.
-        let reserved = frame_size(media, None, max_width, max_height);
+        // The space is the size the picture was last drawn at, when known:
+        // a message without dimensions (or with wrong ones) would otherwise
+        // take one height on screen and another off it, and a picture across
+        // the top edge of a transcript held at its end would flip between
+        // them on every frame, shaking the whole chat (#179).
+        let fit = |pixels: Vec2| {
+            if sticker.is_some() {
+                fit_sticker(pixels.x, pixels.y)
+            } else {
+                fit_picture(pixels.x, pixels.y, max_width, max_height)
+            }
+        };
+        let pixels_id = egui::Id::new(("picture-pixels", path));
+        let drawn = ui.ctx().data(|data| data.get_temp::<Vec2>(pixels_id));
+        let reserved = drawn.map_or_else(|| frame_size(media, None, max_width, max_height), fit);
         let position = ui.next_widget_position();
         if !ui.is_rect_visible(Rect::from_min_size(position, reserved)) {
             ui.allocate_exact_size(reserved, Sense::hover());
@@ -4993,11 +5007,11 @@ fn picture(
         let image = widgets::file_image(ui, path);
         return match image.load_for_size(ui.ctx(), vec2(max_width, max_height)) {
             Ok(egui::load::TexturePoll::Ready { texture }) => {
-                let size = if sticker.is_some() {
-                    fit_sticker(texture.size.x, texture.size.y)
-                } else {
-                    fit_picture(texture.size.x, texture.size.y, max_width, max_height)
-                };
+                if drawn != Some(texture.size) {
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(pixels_id, texture.size));
+                }
+                let size = fit(texture.size);
                 let response = ui.add(
                     image
                         .fit_to_exact_size(size)
@@ -5021,10 +5035,11 @@ fn picture(
                 size.x
             }
             Ok(egui::load::TexturePoll::Pending { .. }) => {
-                let size = if sticker.is_some() {
-                    Vec2::splat(STICKER_SIDE)
-                } else {
-                    frame_size(media, None, max_width, max_height)
+                // A picture released while away loads again at its old size.
+                let size = match drawn {
+                    Some(pixels) => fit(pixels),
+                    None if sticker.is_some() => Vec2::splat(STICKER_SIDE),
+                    None => frame_size(media, None, max_width, max_height),
                 };
                 let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
                 if ui.is_rect_visible(rect) {
