@@ -964,6 +964,8 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     ))
                     .tab_stop(Stop::Attach);
                     composer_tools_menu(app, chat, &tools);
+                    // Plus and emoji sit close together, as a pair.
+                    ui.add_space(COMPOSER_PAIR_GAP - ui.spacing().item_spacing.x);
                     let smile = last_line(ui, line, |ui| theme::icon_button(
                         ui,
                         Icon::Smile,
@@ -987,7 +989,15 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 let field_width = (ui.available_width() - button_width - 10.0).max(0.0);
                 Frame::new()
                     .fill(Color32::TRANSPARENT)
-                    .inner_margin(Margin::symmetric(8, field_margin as i8))
+                    // One point higher than the geometric centre: most lines
+                    // have letters that drop below the baseline, which makes a
+                    // centred line look low.
+                    .inner_margin(Margin {
+                        left: 8,
+                        right: 8,
+                        top: (field_margin - 1.0).max(0.0) as i8,
+                        bottom: (field_margin + 1.0) as i8,
+                    })
                     .show(ui, |ui| {
                         ui.set_width((field_width - 16.0).max(0.0));
                         // Grow from one to six lines, then scroll.
@@ -1246,6 +1256,8 @@ const COMPOSER_PADDING: f32 = 14.0;
 /// Height of the plus and emoji buttons: a row is never shorter, or they
 /// would stretch it and pull the text off its centre.
 const COMPOSER_CONTROL: f32 = 36.0;
+/// Space between the plus and emoji buttons.
+const COMPOSER_PAIR_GAP: f32 = 2.0;
 
 /// Where the composer's rounded field was drawn, for layout tests.
 pub(crate) fn composer_pill_id() -> egui::Id {
