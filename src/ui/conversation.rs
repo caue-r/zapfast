@@ -949,6 +949,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 vec2(ui.available_width(), row_height),
                 Layout::left_to_right(Align::Max),
                 |ui| {
+                // The plus sits in the field's rounded left end, centred as
+                // the send button is in the right one.
+                ui.add_space((line / 2.0 - PLUS_EDGE / 2.0).max(0.0));
                 if app.editing.is_none() {
                     let tools = last_line(ui, line, |ui| theme::icon_button(
                         ui,
@@ -1258,10 +1261,14 @@ const COMPOSER_PADDING: f32 = 14.0;
 /// Height of the plus and emoji buttons: a row is never shorter, or they
 /// would stretch it and pull the text off its centre.
 const COMPOSER_CONTROL: f32 = 36.0;
-/// Space between the composer's rounded field and the send button.
+/// Space between the composer's rounded field and the buttons at its ends.
 const COMPOSER_INSET: i8 = 2;
-/// Space between the plus and emoji buttons.
-const COMPOSER_PAIR_GAP: f32 = 2.0;
+/// Space between the plus and emoji buttons' hit areas. Each area pads its
+/// 22-point icon by six points a side, so this leaves eight between the
+/// icons, a pair.
+const COMPOSER_PAIR_GAP: f32 = -4.0;
+/// Width of the plus button: its 22-point icon and `icon_button`'s padding.
+const PLUS_EDGE: f32 = 34.0;
 
 /// Where the composer's rounded field was drawn, for layout tests.
 pub(crate) fn composer_pill_id() -> egui::Id {
@@ -1286,10 +1293,10 @@ fn composer_pill(palette: &Palette) -> Frame {
             spread: 0,
             color: Color32::from_black_alpha(31),
         })
-        // The send button is inset on the right by as much as above and
-        // below, so it sits evenly in the rounded end.
+        // The end buttons are inset by as much at the sides as above and
+        // below, so they sit evenly in the rounded ends.
         .inner_margin(Margin {
-            left: 8,
+            left: COMPOSER_INSET,
             right: COMPOSER_INSET,
             top: COMPOSER_INSET,
             bottom: COMPOSER_INSET,
@@ -5922,50 +5929,13 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
         .round()
         .max(COMPOSER_CONTROL);
     let button = row_height;
+    // As in WhatsApp: discard at the start, the light and the time, the
+    // waveform across the rest, and send at the end.
     ui.allocate_ui_with_layout(
         vec2(ui.available_width().max(0.0), row_height),
-        egui::Layout::right_to_left(egui::Align::Center),
+        egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing.x = 10.0;
-            if theme::circle_button(
-                ui,
-                Icon::Send,
-                button,
-                palette.accent,
-                palette.accent_hover,
-                palette.on_accent,
-                "Send",
-            )
-            .clicked()
-            {
-                app.actions.push(Action::SendRecording);
-            }
-            // Recent audio levels, newest on the right.
-            let wave_width = ui.available_width().clamp(40.0, 150.0);
-            let (rect, _) = ui.allocate_exact_size(vec2(wave_width, 28.0), Sense::hover());
-            let pitch = 3.0;
-            let count = (rect.width() / pitch).floor() as usize;
-            let start = levels.len().saturating_sub(count);
-            for (index, level) in levels[start..].iter().enumerate() {
-                let height = 2.0_f32 + (level * 4.0).min(1.0) * 24.0;
-                let x = rect.left() + index as f32 * pitch + 1.0;
-                ui.painter().rect_filled(
-                    Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(2.0, height)),
-                    1.0,
-                    palette.accent,
-                );
-            }
-            // Pulsing recording light and elapsed time.
-            theme::text(
-                ui,
-                crate::util::duration(elapsed.as_secs() as u32),
-                theme::medium(14.0),
-                palette.text,
-            );
-            let (dot, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
-            let pulse = 0.55 + 0.45 * (elapsed.as_secs_f32() * 3.0).sin().abs();
-            ui.painter()
-                .circle_filled(dot.center(), 5.0, palette.danger.gamma_multiply(pulse));
             if theme::circle_button(
                 ui,
                 Icon::Trash,
@@ -5979,8 +5949,54 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
             {
                 app.actions.push(Action::CancelRecording);
             }
+            let (dot, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+            let pulse = 0.55 + 0.45 * (elapsed.as_secs_f32() * 3.0).sin().abs();
+            ui.painter()
+                .circle_filled(dot.center(), 5.0, palette.danger.gamma_multiply(pulse));
+            theme::text(
+                ui,
+                crate::util::duration(elapsed.as_secs() as u32),
+                theme::medium(14.0),
+                palette.text,
+            );
+            // Recent audio levels, newest on the right against send.
+            let spacing = ui.spacing().item_spacing.x;
+            let wave_width = (ui.available_width() - button - spacing).max(0.0);
+            let (rect, _) = ui.allocate_exact_size(vec2(wave_width, 28.0), Sense::hover());
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(recording_wave_id(), rect));
+            let pitch = 3.0;
+            let count = (rect.width() / pitch).floor() as usize;
+            let shown = &levels[levels.len().saturating_sub(count)..];
+            for (index, level) in shown.iter().enumerate() {
+                let height = 2.0_f32 + (level * 4.0).min(1.0) * 24.0;
+                let x = rect.right() - (shown.len() - index) as f32 * pitch + 1.0;
+                ui.painter().rect_filled(
+                    Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(2.0, height)),
+                    1.0,
+                    palette.accent,
+                );
+            }
+            if theme::circle_button(
+                ui,
+                Icon::Send,
+                button,
+                palette.accent,
+                palette.accent_hover,
+                palette.on_accent,
+                "Send",
+            )
+            .clicked()
+            {
+                app.actions.push(Action::SendRecording);
+            }
         },
     );
+}
+
+/// Where the recorder's waveform was drawn, for layout tests.
+pub(crate) fn recording_wave_id() -> egui::Id {
+    egui::Id::new("recording-wave")
 }
 
 /// Replaces the composer while messages are selected.

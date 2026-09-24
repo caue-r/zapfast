@@ -6604,6 +6604,48 @@ mod tests {
             (right - bottom).abs() <= 1.0,
             "send is {right} from the right and {bottom} from the bottom"
         );
+        // The plus mirrors it in the left end, and emoji stays close by.
+        let rect = |stop| {
+            let id = crate::ui::focus::stops(&ctx)
+                .into_iter()
+                .find(|(found, _)| *found == stop)
+                .map(|(_, id)| id)
+                .unwrap_or_else(|| panic!("{stop:?} is drawn"));
+            ctx.read_response(id).unwrap().rect
+        };
+        let plus = rect(crate::ui::focus::Stop::Attach);
+        let emoji = rect(crate::ui::focus::Stop::Emoji);
+        let left = plus.center().x - pill.left();
+        let right = pill.right() - send.center().x;
+        assert!(
+            (left - right).abs() <= 1.0,
+            "plus centre is {left} from the left, send's {right} from the right"
+        );
+        let apart = emoji.center().x - plus.center().x;
+        assert!(apart <= 32.0, "plus and emoji are {apart} apart");
+    }
+
+    /// The recorder runs discard, time, waveform and send from left to right,
+    /// with the waveform taking the space between.
+    #[test]
+    fn the_recorder_waveform_fills_the_field() {
+        let mut app = app();
+        app.recording = Some(crate::audio::Recorder::rehearsal());
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        for _ in 0..3 {
+            frame_sized(&mut app, &ctx, 780.0, Vec::new());
+        }
+        let wave = ctx
+            .data(|data| data.get_temp::<egui::Rect>(crate::ui::conversation::recording_wave_id()))
+            .expect("the recorder is drawn");
+        // The window is 1180 points wide; the old strip stopped at 150.
+        assert!(
+            wave.width() > 400.0,
+            "the waveform is {} wide",
+            wave.width()
+        );
     }
 
     #[test]
