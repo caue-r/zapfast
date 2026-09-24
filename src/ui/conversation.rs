@@ -937,10 +937,22 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 .max(COMPOSER_CONTROL);
             let button_width = line;
             let field_margin = ((line - line_height) / 2.0).round().max(0.0);
+            // Measure this frame's draft at the text column's width, so the
+            // field and the panel holding it grow on the keystroke that wraps
+            // a line rather than a frame later, which made them jump.
+            let wrap_id = id.with("wrap");
             let text_height = ui
                 .ctx()
-                .read_response(id)
-                .map(|previous| previous.rect.height())
+                .data(|data| data.get_temp::<f32>(wrap_id))
+                .map(|wrap| {
+                    let format =
+                        egui::TextFormat::simple(theme::regular(BODY_SIZE), palette.text);
+                    crate::bidi::layout_editor(ui, &app.composer, &format, wrap, true)
+                        .0
+                        .size()
+                        .y
+                })
+                .or_else(|| ui.ctx().read_response(id).map(|previous| previous.rect.height()))
                 .unwrap_or(line_height)
                 .clamp(line_height, line_height * 6.0);
             let row_height = (text_height + 2.0 * field_margin).max(line);
@@ -1005,12 +1017,14 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     })
                     .show(ui, |ui| {
                         ui.set_width((field_width - 16.0).max(0.0));
-                        // Grow from one to six lines, then scroll.
+                        // Grow from one to six lines, then scroll. The height
+                        // is this frame's draft, measured above, rather than
+                        // the scroll area's memory of the last frame.
                         egui::ScrollArea::vertical()
                             .id_salt("composer-scroll")
-                            .max_height(line_height * 6.0)
-                            .min_scrolled_height(0.0)
-                            .auto_shrink([false, true])
+                            .max_height(text_height)
+                            .min_scrolled_height(text_height)
+                            .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 // Keep emoji in the buffer so character offsets match, then
                                 // paint their color bitmaps over the transparent glyphs.
@@ -1033,6 +1047,8 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     clusters = found;
                                     galley
                                 };
+                                let wrap = ui.available_width();
+                                ui.ctx().data_mut(|data| data.insert_temp(wrap_id, wrap));
                                 let output = egui::TextEdit::multiline(&mut app.composer)
                                     .id(id)
                                     .frame(Frame::NONE)
@@ -1078,6 +1094,35 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     }
                                     let rect = bounds.translate(output.galley_pos.to_vec2());
                                     crate::emoji::paint_cluster(ui, cluster, rect);
+                                }
+                                // The row was sized from last frame's text. When a
+                                // keystroke wraps or unwraps a line, lay the frame
+                                // out again instead of showing the field a frame
+                                // late, which made it jump while typing.
+                                // egui sizes the box before applying the keystroke,
+                                // and text typed into an empty field reaches its
+                                // galley a frame later still, so measure the
+                                // edited draft itself.
+                                let painted = Rect::from_min_size(
+                                    output.galley_pos,
+                                    output.galley.size(),
+                                );
+                                let measured = crate::bidi::layout_editor(
+                                    ui,
+                                    &app.composer,
+                                    &format,
+                                    wrap,
+                                    true,
+                                )
+                                .0
+                                .size()
+                                .y
+                                .clamp(line_height, line_height * 6.0);
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(composer_text_id(), painted);
+                                });
+                                if (measured - text_height).abs() > 0.5 {
+                                    ui.ctx().request_discard("composer height changed");
                                 }
                                 let response = output.response.response.clone().tab_stop(Stop::Composer);
                                 ui.ctx().accesskit_node_builder(response.id, |node| node.set_label("Message"));
@@ -1247,6 +1292,19 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 });
             }
         });
+    // A bottom panel is placed from last frame's height. When the composer
+    // grows or shrinks, lay the frame out again so it never shows the field
+    // hanging below the window or a gap above it for a frame.
+    let height = shown.response.rect.height();
+    let height_id = egui::Id::new("composer-panel-height");
+    let previous = ui.ctx().data_mut(|data| {
+        let previous = data.get_temp::<f32>(height_id);
+        data.insert_temp(height_id, height);
+        previous
+    });
+    if previous.is_some_and(|previous| (previous - height).abs() > 0.5) {
+        ui.ctx().request_discard("composer height changed");
+    }
     // Toasts sit above the composer so they never cover its buttons.
     ui.ctx()
         .data_mut(|data| data.insert_temp(super::composer_rect_id(), shown.response.rect));
@@ -1269,6 +1327,12 @@ const COMPOSER_INSET: i8 = 2;
 const COMPOSER_PAIR_GAP: f32 = -4.0;
 /// Width of the plus button: its 22-point icon and `icon_button`'s padding.
 const PLUS_EDGE: f32 = 34.0;
+
+/// Where the composer's text was painted in the frame's last pass, for
+/// layout tests.
+pub(crate) fn composer_text_id() -> egui::Id {
+    egui::Id::new("composer-text-rect")
+}
 
 /// Where the composer's rounded field was drawn, for layout tests.
 pub(crate) fn composer_pill_id() -> egui::Id {

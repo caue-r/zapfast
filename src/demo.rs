@@ -6577,6 +6577,78 @@ mod tests {
         }
     }
 
+    /// A keystroke that wraps the draft onto another line, or joins it back,
+    /// shows the grown field in that same frame: sizing it from the frame
+    /// before made the field and its text jump while typing.
+    #[test]
+    fn typing_never_shows_the_composer_a_frame_late() {
+        for scale in [1.0_f32, 1.25, 1.5] {
+            let mut app = app();
+            app.focus_composer = true;
+            let ctx = egui::Context::default();
+            ctx.set_pixels_per_point(scale);
+            app.attach(&ctx);
+            render(&mut app, &ctx);
+            for _ in 0..3 {
+                frame_with(&mut app, &ctx, Vec::new());
+            }
+            let snap = |ctx: &egui::Context| {
+                ctx.data(|data| {
+                    (
+                        data.get_temp::<egui::Rect>(crate::ui::conversation::composer_pill_id()),
+                        data.get_temp::<egui::Rect>(crate::ui::conversation::composer_text_id()),
+                    )
+                })
+            };
+            let key = |key| egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            };
+            let draft = "A synthetic line that keeps going until it wraps across the composer, with enough words after that to be sure it reaches a second row.";
+            let mut events: Vec<egui::Event> = draft
+                .chars()
+                .map(|ch| egui::Event::Text(ch.to_string()))
+                .collect();
+            events.extend((0..draft.len()).map(|_| key(egui::Key::Backspace)));
+            events.push(egui::Event::Text("one\ntwo\nthree".into()));
+            let mut heights = std::collections::BTreeSet::new();
+            for (index, event) in events.into_iter().enumerate() {
+                frame_with(&mut app, &ctx, vec![event]);
+                let typed = snap(&ctx);
+                frame_with(&mut app, &ctx, Vec::new());
+                let settled = snap(&ctx);
+                let (Some(pill), Some(text)) = settled else {
+                    panic!("the composer is drawn")
+                };
+                // The field, and where its text starts, must not move once
+                // the keystroke has landed. (egui lays out the first
+                // character typed into an empty field a frame late, so the
+                // text's far corner is not compared.)
+                let (Some(typed_pill), Some(typed_text)) = typed else {
+                    panic!("the composer is drawn")
+                };
+                assert!(
+                    (typed_pill.min - pill.min).length() < 0.5
+                        && (typed_pill.max - pill.max).length() < 0.5
+                        && (typed_text.min - text.min).length() < 0.5,
+                    "event {index} at scale {scale}: {typed:?} then {settled:?}"
+                );
+                assert!(
+                    pill.contains_rect(text),
+                    "text {text:?} leaves the field {pill:?}"
+                );
+                heights.insert(pill.height() as u32);
+            }
+            assert!(
+                heights.len() >= 3,
+                "the draft wrapped and grew: {heights:?}"
+            );
+        }
+    }
+
     /// The send button sits evenly in the field's rounded end: as far from
     /// its right edge as from its top and bottom.
     #[test]

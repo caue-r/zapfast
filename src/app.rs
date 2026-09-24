@@ -936,6 +936,10 @@ impl App {
         crate::theme::install(ctx);
         // Use a faster wheel speed for short chat rows.
         ctx.options_mut(|options| options.input_options.line_scroll_speed = 120.0);
+        // A keystroke that wraps the draft is applied in one pass, and the
+        // bottom panel holding the composer only takes the new height in
+        // the next: three passes keep it from showing a frame out of place.
+        ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(3).unwrap());
         // Load and index the color emoji font outside the frame loop.
         std::thread::Builder::new()
             .name("emoji-font".into())
