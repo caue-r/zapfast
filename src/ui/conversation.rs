@@ -986,7 +986,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                         app.actions.push(Action::TogglePicker(PickerTab::Emoji));
                     }
                 }
-                let field_width = (ui.available_width() - button_width - 10.0).max(0.0);
+                // The send button closes the row, flush with the field's end.
+                let field_width =
+                    (ui.available_width() - button_width - ui.spacing().item_spacing.x).max(0.0);
                 Frame::new()
                     .fill(Color32::TRANSPARENT)
                     // One point higher than the geometric centre: most lines
@@ -1256,6 +1258,8 @@ const COMPOSER_PADDING: f32 = 14.0;
 /// Height of the plus and emoji buttons: a row is never shorter, or they
 /// would stretch it and pull the text off its centre.
 const COMPOSER_CONTROL: f32 = 36.0;
+/// Space between the composer's rounded field and the send button.
+const COMPOSER_INSET: i8 = 2;
 /// Space between the plus and emoji buttons.
 const COMPOSER_PAIR_GAP: f32 = 2.0;
 
@@ -1282,7 +1286,14 @@ fn composer_pill(palette: &Palette) -> Frame {
             spread: 0,
             color: Color32::from_black_alpha(31),
         })
-        .inner_margin(Margin::symmetric(8, 2))
+        // The send button is inset on the right by as much as above and
+        // below, so it sits evenly in the rounded end.
+        .inner_margin(Margin {
+            left: 8,
+            right: COMPOSER_INSET,
+            top: COMPOSER_INSET,
+            bottom: COMPOSER_INSET,
+        })
 }
 
 /// The plus menu beside the composer: send files or create a poll.

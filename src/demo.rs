@@ -6577,6 +6577,35 @@ mod tests {
         }
     }
 
+    /// The send button sits evenly in the field's rounded end: as far from
+    /// its right edge as from its top and bottom.
+    #[test]
+    fn the_send_button_is_inset_evenly_in_the_field() {
+        let mut app = app();
+        app.composer = "A synthetic draft".into();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        for _ in 0..3 {
+            frame_sized(&mut app, &ctx, 780.0, Vec::new());
+        }
+        let pill = ctx
+            .data(|data| data.get_temp::<egui::Rect>(crate::ui::conversation::composer_pill_id()))
+            .expect("the composer is drawn");
+        let id = crate::ui::focus::stops(&ctx)
+            .into_iter()
+            .find(|(stop, _)| *stop == crate::ui::focus::Stop::Send)
+            .map(|(_, id)| id)
+            .expect("send is drawn");
+        let send = ctx.read_response(id).unwrap().rect;
+        let right = pill.right() - send.right();
+        let bottom = pill.bottom() - send.bottom();
+        assert!(
+            (right - bottom).abs() <= 1.0,
+            "send is {right} from the right and {bottom} from the bottom"
+        );
+    }
+
     #[test]
     fn the_plus_menu_sends_files_or_creates_a_poll_and_closes() {
         let click = |app: &mut App, ctx: &egui::Context, pos: egui::Pos2| {
