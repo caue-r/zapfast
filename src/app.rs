@@ -76,6 +76,17 @@ pub struct Conversation {
     pub phone_misses: u32,
     /// Whether messages arrived after the latest phone request.
     pub phone_delivered: bool,
+    /// The height each row last took, keyed by message id, so the transcript
+    /// can skip rows far from the viewport instead of laying them out.
+    pub(crate) rows: HashMap<String, RowHeight>,
+}
+
+/// A transcript row's height as last laid out or estimated.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RowHeight {
+    pub height: f32,
+    /// The egui pass the row was last laid out in; `None` for an estimate.
+    pub pass: Option<u64>,
 }
 
 impl Conversation {
