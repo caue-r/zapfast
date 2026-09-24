@@ -1383,6 +1383,29 @@ fn poll_sample(app: &mut App, voted: bool, results: bool) {
     }
 }
 
+/// A bigger group's audience for one of our messages: some members read it,
+/// some only have it, and the rest have not received it yet.
+fn sample_recipients(now: i64) -> Vec<crate::model::Recipient> {
+    let recipient = |id: &str, delivered: Option<i64>, read: Option<i64>| crate::model::Recipient {
+        id: id.into(),
+        expected: true,
+        delivered_at: delivered.map(|minutes| now - minutes * 60),
+        read_at: read.map(|minutes| now - minutes * 60),
+        played_at: None,
+    };
+    vec![
+        recipient("491701111111@s.whatsapp.net", Some(24), Some(3)),
+        recipient("491702222222@s.whatsapp.net", Some(24), Some(11)),
+        recipient(SAMPLES[2].id, Some(23), Some(19)),
+        recipient("491703333333@s.whatsapp.net", Some(22), None),
+        recipient(SAMPLES[4].id, Some(9), None),
+        recipient("12025550137@s.whatsapp.net", Some(20), None),
+        recipient("491704444444@s.whatsapp.net", None, None),
+        recipient("491705555555@s.whatsapp.net", None, None),
+        recipient("491706666666@s.whatsapp.net", None, None),
+    ]
+}
+
 /// "Message info" for our message in a bigger group: some members read it,
 /// some only have it, and the rest have not received it yet. Without a saved
 /// audience, the dialog explains that earlier receipts are unknown.
@@ -1400,32 +1423,14 @@ fn message_info_sample(app: &mut App, recorded: bool) {
         .unwrap();
     message.status = crate::model::Delivery::Delivered;
     let id = message.id.clone();
-    let recipient = |id: &str, delivered: Option<i64>, read: Option<i64>| crate::model::Recipient {
-        id: id.into(),
-        expected: true,
-        delivered_at: delivered.map(|minutes| now - minutes * 60),
-        read_at: read.map(|minutes| now - minutes * 60),
-        played_at: None,
-    };
-    let recipients = if recorded {
-        vec![
-            recipient("491701111111@s.whatsapp.net", Some(24), Some(3)),
-            recipient("491702222222@s.whatsapp.net", Some(24), Some(11)),
-            recipient(SAMPLES[2].id, Some(23), Some(19)),
-            recipient("491703333333@s.whatsapp.net", Some(22), None),
-            recipient(SAMPLES[4].id, Some(9), None),
-            recipient("12025550137@s.whatsapp.net", Some(20), None),
-            recipient("491704444444@s.whatsapp.net", None, None),
-            recipient("491705555555@s.whatsapp.net", None, None),
-            recipient("491706666666@s.whatsapp.net", None, None),
-        ]
-    } else {
-        Vec::new()
-    };
     app.message_receipts = Some(crate::model::MessageReceipts {
         chat: chat.into(),
         message: id.clone(),
-        recipients,
+        recipients: if recorded {
+            sample_recipients(now)
+        } else {
+            Vec::new()
+        },
     });
     app.receipts_watch = Some((chat.into(), id.clone()));
     app.dialog = Some(Dialog::MessageInfo {

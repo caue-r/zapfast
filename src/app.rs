@@ -3577,7 +3577,16 @@ impl App {
                 if self.open_chat.is_some() && self.recording.is_none() {
                     self.picker = None;
                     self.composer_tools_open = false;
-                    self.recording = Some(Recorder::start(self.waker.clone()));
+                    // An offline demo never opens the microphone.
+                    #[cfg(any(test, feature = "demo"))]
+                    let recorder = if self.backend.is_offline() {
+                        Recorder::simulated(self.waker.clone())
+                    } else {
+                        Recorder::start(self.waker.clone())
+                    };
+                    #[cfg(not(any(test, feature = "demo")))]
+                    let recorder = Recorder::start(self.waker.clone());
+                    self.recording = Some(recorder);
                 }
             }
             Action::CancelRecording => {

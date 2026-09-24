@@ -681,6 +681,7 @@ cargo run --features demo -- --demo            # sample chats, no connection
 cargo run --features demo -- --demo-page login # or settings, pair, info, light, …
 cargo run --features demo -- --demo-shot shot.png --demo-page chat,light
 cargo run --features demo -- --demo-tour      # Space starts/replays a 41-second tour
+cargo run --features demo -- --demo-tour --demo-tour-script whats-new # what 0.16 added
 cargo run --features demo -- --demo-hover 900,400 # holds a fake pointer there
 cargo test --all-features                      # includes a headless layout of every screen
 cargo clippy --all-targets --all-features -- -D warnings
@@ -721,6 +722,16 @@ Noto emoji font; demo GIF search uses these local fixtures. The tour makes no
 sound and holds its final frame. Space rebuilds the sample and replays.
 For an automatic start, add `--demo-tour-delay 5000` (milliseconds).
 Use `--demo` instead of `--demo-tour` to explore the sample chats yourself.
+
+`--demo-tour-script whats-new` plays an 86-second tour of what ZapFast 0.16
+added instead: the composer's plus menu and poll dialog, searching a chat and
+narrowing it to a day, the photo preview, videos and round video messages
+playing in place, sticker shelves and sticker search, message info in a group,
+the Favorites and label chips and a chat's menu, recording a voice message and
+choosing a playback speed, the chat list folded to avatars, hover controls,
+Ctrl-click and Shift-click selection with Forward, and Settings (languages,
+search, and the light theme). `--demo-tour-script launch` is the default.
+Demo runs never open the microphone: recording plays back a synthetic tone.
 Use `--demo-page rtl-self` for a self-chat of mixed Hebrew, Arabic, and
 English lines.
 Use `--demo-page composer-tools` to preview the WhatsApp-style composer pill
@@ -766,8 +777,26 @@ python3 scripts/render-demo.py recording.mp4 tour.json launch.mp4 --start 0.8
 Set `--start` to the recording time (in seconds) when you pressed Space. The
 export trims the setup footage, adds a caption band below the app, and produces
 a silent H.264 MP4. It requires `ffmpeg` with libass support and `ffprobe`.
+`--scale 1.5` keeps 1.5 pixels per point, for example 1920 pixels across from a
+1280-point window recorded at 2x; the default is one pixel per point.
+
 These annotations are added during video export, not drawn by the app. The
 trace contains only pointer coordinates and shortcut labels, not typed text.
+
+Instead of recording the screen, the tour can save its own frames. With
+`--demo-tour-frames DIR`, it starts at once, plays on a virtual clock (steady
+frame times even when a frame is slow to draw), writes every frame as a PNG
+at the window's pixel size, and quits when the tour ends. `--demo-fps` sets the
+rate (30 by default). The window still has to be shown somewhere; a virtual
+output keeps it off your screens. Then assemble and annotate the frames:
+
+```sh
+cargo build --release --locked --features demo
+./target/release/zapfast --demo-tour --demo-tour-script whats-new \
+  --demo-size 1280x800 --demo-tour-frames frames --demo-tour-events tour.json
+ffmpeg -framerate 30 -i frames/frame-%05d.png -c:v libx264 -crf 12 -pix_fmt yuv420p raw.mp4
+python3 scripts/render-demo.py raw.mp4 tour.json whats-new.mp4 --scale 1.5
+```
 
 ## Disclaimer
 
