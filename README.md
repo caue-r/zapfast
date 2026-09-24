@@ -288,7 +288,8 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   `(DDD) XXXXX-XXXX`.
 - **Keyboard shortcuts.** `Ctrl+K` or `Ctrl+Shift+F` searches your chats,
   `Ctrl+F` searches the open chat as in WhatsApp (Enter and Shift+Enter move
-  between matches; with no chat open it searches your chats), `Alt+↑/↓` switches chats and
+  between matches; with no chat open it searches your chats, and in Settings it
+  searches the settings), `Alt+↑/↓` switches chats and
   keeps the active chat visible in the list, `↑` in an empty input edits your
   previous message, `Esc` cancels the current action, `Ctrl+L` focuses the
   message input, `Ctrl+N` opens New chat, `Ctrl+B` hides or shows the chat
@@ -523,6 +524,14 @@ which restriction applies. Replies from other devices retain their quotes too.
 These screenshots use synthetic offline chats. See the
 [usage guide](https://zapfast.rocks/using-zapfast/#interactive-messages) for
 download behavior and the remaining limitations.
+### Finding a setting
+
+The search field at the top of **Settings** narrows the page to the settings
+whose name or description contains what you type, ignoring case and accents,
+and hides sections with nothing left. A match on a section's name keeps the
+whole section. Translated settings are found in the interface language and in
+English. `Ctrl+F` on the Settings page focuses the field, and `Esc` clears it.
+
 ### Interface language
 
 **Settings > Appearance > Language** chooses the interface language. **Auto**

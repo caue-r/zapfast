@@ -392,6 +392,9 @@ pub struct App {
     pub jump_highlight: Option<JumpHighlight>,
     pub focus_composer: bool,
     pub focus_search: bool,
+    /// What the Settings page is filtered by.
+    pub settings_search: String,
+    pub focus_settings_search: bool,
     pub quit_requested: bool,
     pub window_focused: bool,
     /// Presence last reported to the backend.
@@ -702,6 +705,8 @@ impl App {
             jump_highlight: None,
             focus_composer: false,
             focus_search: false,
+            settings_search: String::new(),
+            focus_settings_search: false,
             quit_requested: false,
             window_focused: false,
             reported_online: None,
@@ -2983,6 +2988,8 @@ impl App {
                 self.emoji_start = None;
                 self.mention_start = None;
                 if opens_chats {
+                    // Settings open unfiltered next time.
+                    self.settings_search.clear();
                     self.refocus_composer(ctx);
                 }
             }
@@ -3973,6 +3980,11 @@ impl App {
                 self.emoji_start = None;
                 self.mention_start = None;
             }
+            Action::FocusSettingsSearch => {
+                self.page = Page::Settings;
+                self.focus_settings_search = true;
+            }
+            Action::SearchSettings(text) => self.settings_search = text,
             Action::FocusComposer => {
                 self.focus_search = false;
                 self.focus_composer = true;

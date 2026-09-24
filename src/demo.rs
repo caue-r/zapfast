@@ -1745,6 +1745,10 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 app.scroll_to_bottom = true;
             }
             "settings" => app.page = Page::Settings,
+            choice if choice.starts_with("settings-search=") => {
+                app.page = Page::Settings;
+                app.settings_search = choice["settings-search=".len()..].to_owned();
+            }
             "wallpaper" => app.page = Page::Wallpaper,
             "omarchy" | "omarchy-light" => {
                 let mut themes: Vec<_> = crate::theme::presets::themes().collect();

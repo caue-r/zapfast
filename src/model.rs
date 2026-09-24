@@ -1316,6 +1316,10 @@ pub enum Action {
     /// Focuses the chat-list search and leaves the open chat alone.
     FocusChatList,
     FocusSearch,
+    /// Focuses the search field on the Settings page.
+    FocusSettingsSearch,
+    /// Filters the Settings page to the rows matching this text.
+    SearchSettings(String),
     FocusComposer,
     HideShortcutHints,
     DismissChatLockHint,
