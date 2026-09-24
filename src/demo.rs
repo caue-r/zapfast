@@ -263,6 +263,10 @@ pub const RTL_SELF_CHAT: [&str; 3] = [
     "إلى السطر التالي\nالله أكبر، لا بأس 🌙\nهذا نص عربي طويل يختبر ترتيب الأسطر عندما تلتف الكلمات داخل فقاعة رسالة ضيقة إلى السطر التالي",
 ];
 
+/// Numbers inside right-to-left text on the `rtl` page: Arabic-Indic and
+/// European digits, a time, and a phone number, each reading left to right.
+const RTL_NUMBERS: &str = "لدي ٤٥ رسالة، الساعة ١٢:٣٠\nعندي 45 رسالة\nاتصل على +49 170 1234567";
+
 fn message(chat: &str, id: &str, from_me: bool, timestamp: i64, content: Content) -> Message {
     Message {
         id: id.to_owned(),
@@ -1744,14 +1748,31 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         });
                         reply
                     },
+                    // Numbers keep their left-to-right order inside
+                    // right-to-left text, and alone (#184).
+                    message(id, "rtl-numbers", false, now, Content::text(RTL_NUMBERS)),
+                    message(id, "rtl-digits", true, now, Content::text("٤٥")),
+                    {
+                        let text = Content::text("עולה 3.14 ש״ח");
+                        let mut reply = message(id, "rtl-digits-reply", false, now, text);
+                        reply.quoted = Some(Quoted {
+                            id: "rtl-digits".into(),
+                            sender: ME.into(),
+                            sender_name: None,
+                            summary: "٤٥".into(),
+                            mentions: Vec::new(),
+                        });
+                        reply
+                    },
                 ];
                 if let Some(chat) = app.chats.iter_mut().find(|chat| chat.id == id) {
                     chat.name = "שלום יזמות ונדל\"ן".into();
                     if let Some(last) = &mut chat.last {
-                        last.summary = "הכלב הגדול קפץ 🐕".into();
+                        last.summary = "٤٥".into();
                     }
                 }
                 app.conversations.get_mut(id).expect("demo group").messages = messages;
+                app.composer = "١٢:٣٠".into();
                 app.open_chat = Some(id.into());
                 app.typing.clear();
                 app.scroll_to_bottom = true;
@@ -3534,6 +3555,65 @@ mod tests {
             reversed.is_empty(),
             "مساء must be right of الخير; reversed instances (index, م x, خ x): {reversed:?}"
         );
+    }
+
+    /// Issue #184: "٤٥" drew as "٥٤". Every number on the `rtl` page, in the
+    /// bubbles, the quote, the chat list preview, and the composer, must read
+    /// left to right, alone or inside right-to-left text.
+    #[test]
+    fn issue_184_numbers_read_left_to_right_everywhere() {
+        fn collect(shape: &egui::Shape, galleys: &mut Vec<std::sync::Arc<egui::Galley>>) {
+            match shape {
+                egui::Shape::Text(text) => galleys.push(text.galley.clone()),
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        collect(shape, galleys);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut app = app();
+        apply_flags(&mut app, Some("rtl"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let shapes = frame_sized(&mut app, &ctx, 780.0, Vec::new());
+        let mut galleys = Vec::new();
+        for shape in shapes {
+            collect(&shape.shape, &mut galleys);
+        }
+        let count = |text: &str| galleys.iter().filter(|g| g.text() == text).count();
+        assert!(
+            count("٤٥") >= 3,
+            "bubble, quote, and chat list preview of \"٤٥\""
+        );
+        assert_eq!(count("١٢:٣٠"), 1, "composer");
+        assert_eq!(
+            galleys
+                .iter()
+                .filter(|g| g.text().replace(crate::emoji::PLACEHOLDER, "") == RTL_NUMBERS)
+                .count(),
+            1,
+            "bubble with numbers inside Arabic"
+        );
+        let mut reversed = Vec::new();
+        for galley in &galleys {
+            for placed in &galley.rows {
+                // A row that was never reordered keeps its glyphs in shaped
+                // order, so compare them in logical (cluster) order.
+                let mut logical: Vec<_> = placed.row.glyphs.iter().collect();
+                logical.sort_by_key(|glyph| glyph.cluster);
+                for pair in logical.windows(2) {
+                    let [left, right] = pair else { continue };
+                    if left.chr.is_numeric() && right.chr.is_numeric() && left.pos.x >= right.pos.x
+                    {
+                        reversed.push((galley.text().to_owned(), left.chr, right.chr));
+                    }
+                }
+            }
+        }
+        assert!(reversed.is_empty(), "reversed digits: {reversed:?}");
     }
 
     #[test]
