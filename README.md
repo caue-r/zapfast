@@ -261,11 +261,16 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   its outstanding notifications. On macOS, notifications use
   the installed ZapFast application's identity without an application chooser;
   unregistered development builds skip notifications if that identity is unavailable.
-  **Message sound** and **Group sound** in Settings choose Pidgin's classic
-  message sound (the default for one-to-one chats) or its alert (the default
-  for groups), the system's notification sound, no sound, or an audio file
-  (WAV, MP3, or OGG Vorbis) that ZapFast plays itself. **Notification sound** in a chat's right-click
-  menu gives that chat its own sound, stored in the encrypted archive.
+  Sounds follow Pidgin: **Message sound** plays for every new message, in
+  chats and groups alike, and **Mention sound** when someone in a group
+  mentions you or replies to one of your messages. Each can be Pidgin's classic
+  message sound (the default for messages), its alert (the default for
+  mentions), the system's notification sound, no sound, or an audio file
+  (WAV, MP3, or OGG Vorbis) that ZapFast plays itself. Turning off **Play
+  sounds for group messages** keeps group notifications silent unless they
+  mention or answer you. **Notification sound** in a chat's right-click menu
+  gives that chat its own sound for every message in it, mentions included,
+  stored in the encrypted archive.
 - **Unread count on the taskbar.** On Linux, ZapFast publishes the unread total
   through the Unity Launcher API, so KDE Plasma shows it as a badge on the
   taskbar icon, with **Show badges** enabled in the Task Manager settings. Other

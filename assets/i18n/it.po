@@ -6,7 +6,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-24 00:50+0200\n"
+"POT-Creation-Date: 2026-09-24 01:23+0200\n"
 "PO-Revision-Date: 2026-09-22 00:00-0300\n"
 "Last-Translator: ZapFast contributors\n"
 "Language-Team: Italian\n"
@@ -151,9 +151,14 @@ msgstr "Archiviate"
 msgid "Locked"
 msgstr "Bloccati"
 
-#: src/ui/chats.rs:766 src/app.rs:1131
+#: src/ui/chats.rs:766 src/app.rs:1154
 msgid "Message yourself"
 msgstr "Invia un messaggio a te stesso"
+
+#: src/ui/chats.rs:1008 src/ui/labels.rs:172 src/ui/labels.rs:223
+#: src/ui/labels.rs:260
+msgid "Labels"
+msgstr "Etichette"
 
 #: src/ui/conversation.rs:161
 msgid "Ctrl+K to search · ? for keyboard shortcuts"
@@ -260,10 +265,9 @@ msgstr "Apri in una mappa"
 msgid "Pause"
 msgstr "Pausa"
 
-#: src/ui/conversation.rs:5097
-#, fuzzy
+#: src/ui/conversation.rs:5097 src/ui/settings.rs:887
 msgid "Play"
-msgstr "Riprodotto"
+msgstr "Riproduci"
 
 #: src/ui/conversation.rs:5120
 msgid "Unmute"
@@ -309,7 +313,7 @@ msgstr "Emoji che lo descrivono, come 😂 o ❤️"
 msgid "Send"
 msgstr "Invia"
 
-#: src/ui/dialogs.rs:970 src/ui/settings.rs:686
+#: src/ui/dialogs.rs:970 src/ui/settings.rs:688
 msgid "Cancel"
 msgstr "Annulla"
 
@@ -376,73 +380,117 @@ msgstr ""
 msgid "Window"
 msgstr "Finestra"
 
-#: src/ui/settings.rs:277
+#: src/ui/settings.rs:250
+msgid "Play sounds for group messages"
+msgstr "Riproduci suoni per i messaggi di gruppo"
+
+#: src/ui/settings.rs:250
+msgid ""
+"When off, group messages notify you silently. Mentions and replies to you "
+"still play the mention sound."
+msgstr "Se disattivato, i messaggi di gruppo ti avvisano senza suono. Le menzioni e le risposte a te riproducono comunque il suono delle menzioni."
+
+#: src/ui/settings.rs:279
 msgid "Network"
 msgstr "Rete"
 
-#: src/ui/settings.rs:309
+#: src/ui/settings.rs:311
 msgid "Account"
 msgstr "Account"
 
-#: src/ui/settings.rs:313
+#: src/ui/settings.rs:315
 msgid "Files"
 msgstr "File"
 
-#: src/ui/settings.rs:359 src/ui/settings.rs:620 src/ui/settings.rs:782
+#: src/ui/settings.rs:361 src/ui/settings.rs:622 src/ui/settings.rs:784
 msgid "About"
 msgstr "Informazioni"
 
-#: src/ui/settings.rs:440
+#: src/ui/settings.rs:442
 msgid "Add doodles"
 msgstr "Aggiungi disegni"
 
-#: src/ui/settings.rs:444
+#: src/ui/settings.rs:446
 msgid "Show the default doodles over the selected colour."
 msgstr "Mostra i disegni predefiniti sopra il colore selezionato."
 
-#: src/ui/settings.rs:589
+#: src/ui/settings.rs:591
 msgid "Change profile picture"
 msgstr "Cambia immagine del profilo"
 
-#: src/ui/settings.rs:612
+#: src/ui/settings.rs:614
 msgid "Your name"
 msgstr "Il tuo nome"
 
-#: src/ui/settings.rs:628
+#: src/ui/settings.rs:630
 msgid "Linked device"
 msgstr "Dispositivo collegato"
 
-#: src/ui/settings.rs:639
+#: src/ui/settings.rs:641
 msgid "Edit your name and About"
 msgstr "Modifica nome e info"
 
-#: src/ui/settings.rs:656
+#: src/ui/settings.rs:658
 msgid "Unlink this computer"
 msgstr "Scollega questo computer"
 
-#: src/ui/settings.rs:676
+#: src/ui/settings.rs:678
 msgid "Save"
 msgstr "Salva"
 
-#: src/ui/settings.rs:750
+#: src/ui/settings.rs:752
 msgid "A native WhatsApp client built with Rust, egui, and whatsapp-rust."
 msgstr "Un client WhatsApp nativo scritto in Rust con egui e whatsapp-rust."
 
-#: src/ui/settings.rs:761
+#: src/ui/settings.rs:763
 #, rust-format
 msgid "Update to {version}"
 msgstr "Aggiorna a {version}"
 
-#: src/ui/settings.rs:771
+#: src/ui/settings.rs:773
 msgid "Keyboard shortcuts"
 msgstr "Scorciatoie da tastiera"
 
-#: src/ui/settings.rs:793
+#: src/ui/settings.rs:795
 msgid "Source code"
 msgstr "Codice sorgente"
 
+#: src/ui/settings.rs:849
+msgid "Mention sound"
+msgstr "Suono delle menzioni"
+
+#: src/ui/settings.rs:852
+msgid "Played when someone mentions you or replies to you in a group."
+msgstr "Riprodotto quando qualcuno ti menziona o ti risponde in un gruppo."
+
+#: src/ui/settings.rs:857
+msgid "Message sound"
+msgstr "Suono dei messaggi"
+
+#: src/ui/settings.rs:858
+msgid "Played for new messages in chats and groups."
+msgstr "Riprodotto per i nuovi messaggi nelle chat e nei gruppi."
+
+#: src/ui/settings.rs:863
+msgid "Pidgin alert"
+msgstr "Avviso di Pidgin"
+
+#: src/ui/settings.rs:864
+msgid "System default"
+msgstr "Predefinito di sistema"
+
+#. Translators: no notification sound.
+#: src/ui/settings.rs:866
+msgctxt "sound"
+msgid "None"
+msgstr "Nessuno"
+
+#: src/ui/settings.rs:904
+msgid "Choose a file…"
+msgstr "Scegli un file…"
+
 #. Translators: {name} is replaced by the author's name, shown as a link.
-#: src/ui/widgets.rs:591
+#: src/ui/widgets.rs:647
 #, rust-format
 msgid "Built with love by {name}"
 msgstr "Fatto con amore da {name}"
@@ -510,25 +558,25 @@ msgstr[1] "{} in attesa"
 msgid "No one yet"
 msgstr "Ancora nessuno"
 
-#: src/app.rs:1052
+#: src/app.rs:1075
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr "Esiste già un’etichetta chiamata «{name}»."
 
-#: src/app.rs:1112
+#: src/app.rs:1135
 #, rust-format
 msgid "{name} (You)"
 msgstr "{name} (Tu)"
 
-#: src/app.rs:1113 src/app.rs:1132
+#: src/app.rs:1136 src/app.rs:1155
 msgid "You"
 msgstr "Tu"
 
-#: src/app.rs:2278
+#: src/app.rs:2307
 msgid "Not sent: ZapFast is not connected to WhatsApp."
 msgstr "Non inviato: ZapFast non è connesso a WhatsApp."
 
-#: src/app.rs:2282
+#: src/app.rs:2311
 msgid ""
 "Not sent: the message you’re replying to isn’t available on this computer. "
 "Cancel the reply to send without a quote."
@@ -536,20 +584,20 @@ msgstr ""
 "Non inviato: il messaggio a cui stai rispondendo non è disponibile su questo "
 "computer. Annulla la risposta per inviare senza citazione."
 
-#: src/app.rs:3558
+#: src/app.rs:3587
 msgid "Added to favorites"
 msgstr "Aggiunto ai preferiti"
 
-#: src/app.rs:3633
+#: src/app.rs:3662
 msgid "Sending the sticker pack…"
 msgstr "Invio del pacchetto di sticker…"
 
-#: src/app.rs:3889 src/ui/labels.rs:294
+#: src/app.rs:3918 src/ui/labels.rs:294
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "Hai {limit} etichette, il massimo che ZapFast conserva."
 
-#: src/app.rs:4395
+#: src/app.rs:4425
 msgid "This video opens in your system player"
 msgstr "Questo video si apre nel lettore di sistema"
 
@@ -611,10 +659,6 @@ msgstr "Colore"
 #: src/ui/labels.rs:149
 msgid "Manage labels"
 msgstr "Gestisci etichette"
-
-#: src/ui/labels.rs:172 src/ui/labels.rs:223 src/ui/labels.rs:260
-msgid "Labels"
-msgstr "Etichette"
 
 #: src/ui/labels.rs:192
 msgid "All chats"

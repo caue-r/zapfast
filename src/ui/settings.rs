@@ -245,7 +245,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         }
                         toggle(ui, app, "Notify about new messages", "Show desktop notifications when the window is hidden, in the background, or showing another chat. Muted chats do not notify you.", |settings| &mut settings.notifications);
                         if app.settings.notifications {
+                            let locale = app.locale;
                             sound_row(ui, app, false);
+                            toggle(ui, app, &crate::i18n::gettext(locale, "Play sounds for group messages"), &crate::i18n::gettext(locale, "When off, group messages notify you silently. Mentions and replies to you still play the mention sound."), |settings| &mut settings.group_sounds);
                             sound_row(ui, app, true);
                         }
                         toggle(ui, app, "Download updates automatically", "Download and verify new releases in the background. You choose when to restart. Native packages and Flatpak update through their package manager.", |settings| &mut settings.download_updates_automatically);
@@ -830,34 +832,51 @@ fn toggle(
     }
 }
 
-/// Sound choice for chat or group notifications, like on the phone.
-fn sound_row(ui: &mut egui::Ui, app: &mut App, group: bool) {
+/// Sound choice for new messages or for mentions and replies to us, as
+/// Pidgin plays one sound for messages and alerts when a chat says your name.
+fn sound_row(ui: &mut egui::Ui, app: &mut App, mention: bool) {
+    use crate::i18n::{gettext, pgettext};
     use crate::settings::NotificationSound;
     let palette = app.palette;
-    let current = if group {
-        app.settings.group_sound.clone()
+    let locale = app.locale;
+    let current = if mention {
+        app.settings.mention_sound.clone()
     } else {
         app.settings.message_sound.clone()
     };
-    let (label, description) = if group {
-        ("Group sound", "Played for new group messages.")
+    let (label, description) = if mention {
+        (
+            gettext(locale, "Mention sound"),
+            gettext(
+                locale,
+                "Played when someone mentions you or replies to you in a group.",
+            ),
+        )
     } else {
         (
-            "Message sound",
-            "Played for new messages in one-to-one chats.",
+            gettext(locale, "Message sound"),
+            gettext(locale, "Played for new messages in chats and groups."),
         )
     };
+    let choices = [
+        (NotificationSound::Receive, "Pidgin".into()),
+        (NotificationSound::Alert, gettext(locale, "Pidgin alert")),
+        (NotificationSound::System, gettext(locale, "System default")),
+        // Translators: no notification sound.
+        (NotificationSound::None, pgettext(locale, "sound", "None")),
+    ];
     let selected = match &current {
-        NotificationSound::Receive => "Pidgin".to_owned(),
-        NotificationSound::Alert => "Pidgin alert".to_owned(),
-        NotificationSound::System => "System default".to_owned(),
-        NotificationSound::None => "None".to_owned(),
         NotificationSound::Custom(path) => path.file_name().map_or_else(
             || "Custom".to_owned(),
             |name| name.to_string_lossy().into_owned(),
         ),
+        sound => choices
+            .iter()
+            .find(|(choice, _)| choice == sound)
+            .map(|(_, name)| name.to_string())
+            .unwrap_or_default(),
     };
-    widgets::setting_row(ui, &palette, label, description, |ui| {
+    widgets::setting_row(ui, &palette, &label, &description, |ui| {
         if !matches!(current, NotificationSound::System | NotificationSound::None)
             && theme::icon_button(
                 ui,
@@ -865,29 +884,27 @@ fn sound_row(ui: &mut egui::Ui, app: &mut App, group: bool) {
                 16.0,
                 palette.secondary,
                 palette.text,
-                "Play",
+                &gettext(locale, "Play"),
             )
             .clicked()
         {
             app.actions.push(Action::PreviewSound(current.clone()));
         }
-        egui::ComboBox::from_id_salt(("notification-sound", group))
+        egui::ComboBox::from_id_salt(("notification-sound", mention))
             .selected_text(selected)
             .width(170.0_f32.min(ui.available_width()))
             .show_ui(ui, |ui| {
-                for (sound, name) in [
-                    (NotificationSound::Receive, "Pidgin"),
-                    (NotificationSound::Alert, "Pidgin alert"),
-                    (NotificationSound::System, "System default"),
-                    (NotificationSound::None, "None"),
-                ] {
+                for (sound, name) in choices {
                     if ui.selectable_label(current == sound, name).clicked() {
                         app.actions
-                            .push(Action::SetNotificationSound { group, sound });
+                            .push(Action::SetNotificationSound { mention, sound });
                     }
                 }
-                if ui.selectable_label(false, "Choose a file…").clicked() {
-                    app.actions.push(Action::PickNotificationSound { group });
+                if ui
+                    .selectable_label(false, gettext(locale, "Choose a file…"))
+                    .clicked()
+                {
+                    app.actions.push(Action::PickNotificationSound { mention });
                 }
             });
     });

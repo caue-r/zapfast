@@ -1344,14 +1344,15 @@ pub enum Action {
     SettingsChanged,
     /// Registers or removes the login entry that starts ZapFast in the tray.
     SetStartWithSystem(bool),
-    /// Sets the notification sound for groups (`true`) or other chats.
+    /// Sets the sound for mentions and replies to us (`true`) or for
+    /// other new messages.
     SetNotificationSound {
-        group: bool,
+        mention: bool,
         sound: crate::settings::NotificationSound,
     },
     /// Asks for an audio file to use as a notification sound.
     PickNotificationSound {
-        group: bool,
+        mention: bool,
     },
     /// Sets a chat's own notification sound; `None` follows Settings.
     SetChatSound {
