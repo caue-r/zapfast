@@ -274,6 +274,10 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   when validation fails. Private read-state updates run one at a time. Failures
   pause the whole queue with backoff from 30 seconds to 15 minutes; pending reads
   remain saved and resume automatically. New messages can still arrive.
+- **Reconnects after sleep.** After the computer wakes from sleep, or when the
+  connection has received nothing for two minutes, ZapFast reconnects and
+  fetches what arrived meanwhile, instead of waiting on a connection that
+  looks open but no longer delivers.
 - **Runs in the background.** Closing the window keeps ZapFast linked in the
   system tray. Reopen it from the tray or by launching it again. Quit from the
   tray or with `Ctrl+Q`, or disable this behavior in Settings. The window

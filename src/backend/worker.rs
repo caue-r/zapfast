@@ -38,6 +38,7 @@ use whatsapp_rust::{MediaRetryResult, MediaReuploadRequest};
 mod device_store;
 mod favorite_chats;
 mod interactive;
+mod link_watch;
 mod poll_history;
 mod polls;
 mod stickers;
@@ -517,6 +518,7 @@ pub async fn run(
         interactive_sending: HashMap::new(),
         receipts_watch: None,
         receipts_pruned: Instant::now(),
+        link_watch: Default::default(),
     };
     worker.load_state();
     worker.backfill();
@@ -561,6 +563,7 @@ pub async fn run(
                 worker.emit_chats();
             }
             _ = tick.tick() => {
+                worker.watch_link();
                 worker.reveal_unconfirmed_after_grace();
                 worker.settle_presence();
                 worker.refresh_legacy_preferences();
@@ -691,6 +694,8 @@ struct Worker {
     receipts_watch: Option<(ChatId, String)>,
     /// When receipts that never found their message were last dropped.
     receipts_pruned: Instant,
+    /// Notices a link that stays open after a sleep but carries nothing.
+    link_watch: link_watch::LinkWatch,
     dirs: AppDirs,
     events: std::sync::mpsc::Sender<Event>,
     commands: mpsc::UnboundedSender<Command>,
@@ -1058,6 +1063,39 @@ impl Worker {
             self.status = status.clone();
             self.emit(Event::Link(status));
         }
+    }
+
+    /// Reconnects a link that the machine slept under, or that has received
+    /// nothing for longer than a working one can. See `link_watch`.
+    fn watch_link(&mut self) {
+        let client = self
+            .client
+            .clone()
+            .filter(|_| matches!(self.status, LinkStatus::Connected));
+        let frames = client.as_ref().map(|client| client.stats().frames_received);
+        let verdict = self
+            .link_watch
+            .check(Instant::now(), std::time::SystemTime::now(), frames);
+        let Some(client) = client else {
+            return;
+        };
+        match verdict {
+            link_watch::Verdict::Healthy => return,
+            link_watch::Verdict::Slept(asleep) => {
+                log::info!(
+                    "link: resumed after {} s asleep, reconnecting",
+                    asleep.as_secs()
+                );
+            }
+            link_watch::Verdict::Silent(quiet) => {
+                log::warn!(
+                    "link: nothing received for {} s, reconnecting",
+                    quiet.as_secs()
+                );
+            }
+        }
+        self.set_status(LinkStatus::Connecting);
+        tokio::spawn(async move { client.reconnect_immediately().await });
     }
 
     fn set_syncing(&mut self, syncing: bool) {
@@ -9615,6 +9653,7 @@ mod receipt_tests {
             interactive_sending: HashMap::new(),
             receipts_watch: None,
             receipts_pruned: Instant::now(),
+            link_watch: Default::default(),
         };
         (worker, events_rx, inbox, wa_events)
     }
