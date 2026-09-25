@@ -1038,11 +1038,14 @@ impl App {
         self.hide_intent = false;
         self.wants_show = false;
         self.refocus_composer(ctx);
+        // Before the tray: muda keeps the first menu handler it is given, and
+        // the tray installs one when it makes its item on the first window.
+        // Ours hands the tray its own events (#215).
+        #[cfg(target_os = "macos")]
+        crate::macos::attach(ctx);
         if let Some(tray) = &mut self.tray {
             tray.attach();
         }
-        #[cfg(target_os = "macos")]
-        crate::macos::attach(ctx);
     }
 
     pub fn is_connected(&self) -> bool {
