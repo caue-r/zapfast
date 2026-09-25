@@ -12,10 +12,6 @@ use clap::Parser;
 struct Cli {
     #[command(subcommand)]
     command: Option<Control>,
-    #[arg(long, hide = true)]
-    update_receipt: Option<std::path::PathBuf>,
-    #[arg(long, hide = true)]
-    update_error: Option<String>,
     /// Log more from the WhatsApp library.
     #[arg(short, long)]
     verbose: bool,
@@ -125,12 +121,11 @@ fn default_log_filter(verbose: bool) -> &'static str {
 }
 
 fn main() -> eframe::Result<()> {
-    let arguments: Vec<_> = std::env::args_os().collect();
-    if arguments.len() == 3 && arguments[1] == "--apply-update" {
-        return zapfast::updates::install::run_helper(std::path::Path::new(&arguments[2]))
-            .map_err(|error| eframe::Error::AppCreation(error.into()));
-    }
-    let cli = Cli::parse();
+    // First, before parsing the command line or touching any state: run the
+    // update helper when asked (`--apply-update <job>`, then exit), and take
+    // `--update-receipt` and `--update-error` off the command line.
+    let launch = fastframe_update::intercept(&zapfast::updates::CONFIG);
+    let cli = Cli::parse_from(&launch.arguments);
     let discovered = paths::AppDirs::discover();
     if matches!(cli.command, Some(Control::ReloadThemes)) {
         if let Err(error) = single_instance::send(&discovered.runtime, "reload-themes") {
@@ -220,7 +215,7 @@ fn main() -> eframe::Result<()> {
     if cli.verbose {
         app.update_arguments.push("--verbose".into());
     }
-    if let Some(error) = cli.update_error {
+    if let Some(error) = launch.error {
         app.toast_error(error);
     }
     if let Some(guard) = &instance {
@@ -245,7 +240,7 @@ fn main() -> eframe::Result<()> {
         let (x, y) = value.split_once(',')?;
         Some(egui::pos2(x.trim().parse().ok()?, y.trim().parse().ok()?))
     });
-    let mut update_receipt = cli.update_receipt;
+    let mut update_receipt = launch.receipt;
     // The link, archive, and tray outlive windows. The shell recreates a
     // window when the tray, a notification, or another launch requests one;
     // without a tray a hidden start shows the window (App::start_hidden).
@@ -360,7 +355,7 @@ fn native_options(demo_persistence: Option<std::path::PathBuf>) -> eframe::Nativ
 struct Shell {
     /// Whether this window's first frame checked that a monitor shows it.
     window_recovery_checked: bool,
-    update_receipt: Option<std::path::PathBuf>,
+    update_receipt: Option<fastframe_update::Receipt>,
     app: fastframe_shell::Held<app::App>,
     #[cfg(feature = "demo")]
     shot: Option<Shot>,
@@ -478,7 +473,7 @@ impl eframe::App for Shell {
         let startup = app.backend.take_startup();
         if let Some(receipt) = self.update_receipt.take() {
             std::thread::spawn(move || {
-                if let Err(error) = zapfast::updates::install::acknowledge(&receipt) {
+                if let Err(error) = receipt.acknowledge() {
                     log::warn!("could not acknowledge the update: {error:#}");
                     return;
                 }

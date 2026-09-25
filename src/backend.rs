@@ -113,7 +113,7 @@ pub struct CreatedPoll {
     pub recipients: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Command {
     RefreshPoll {
         chat: ChatId,
@@ -657,7 +657,7 @@ pub enum Command {
         source: crate::updates::Source,
     },
     InstallUpdate {
-        prepared: Box<crate::updates::install::Prepared>,
+        prepared: Box<crate::updates::Prepared>,
         arguments: Vec<String>,
     },
 }
@@ -857,12 +857,12 @@ pub enum Event {
         version: String,
         url: String,
     },
-    UpdateSupport(Result<crate::updates::install::Installation, String>),
+    UpdateSupport(Result<crate::updates::Installation, String>),
     UpdateProgress {
         received: u64,
         total: u64,
     },
-    UpdateDownloaded(Result<Box<crate::updates::install::Prepared>, String>),
+    UpdateDownloaded(Result<Box<crate::updates::Prepared>, String>),
     UpdateInstalling(Result<(), String>),
     /// A send was refused before anything left this computer. It returns
     /// what was being sent so the user loses neither text nor a recording.

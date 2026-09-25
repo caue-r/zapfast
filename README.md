@@ -678,7 +678,9 @@ you to restart. Downloads contact GitHub's API and release-asset hosts and are
 checked against the release's SHA-256 checksums. Before downloading a package,
 the updater verifies the checksum manifest's Ed25519 publisher signature using
 its embedded public key. Missing or invalid signatures stop the update.
-The updater keeps a backup and restores it if the updated app cannot start.
+The updater keeps a backup and restores it if the updated app cannot start;
+its helper writes what it did to `helper.log` in the update's staging folder
+beside the app.
 Release builds also carry GitHub provenance attestations, independently
 verifiable with `gh attestation verify FILE -R crmne/zapfast`.
 See [update signing](packaging/UPDATE_SIGNING.md) for key custody and recovery.

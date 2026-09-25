@@ -1890,10 +1890,7 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             }
             "update" | "update-downloading" | "update-ready" | "update-failed"
             | "update-managed" => {
-                use crate::updates::{
-                    DownloadState,
-                    install::{Installation, Kind, Prepared},
-                };
+                use crate::updates::{DownloadState, Installation, Kind, Prepared};
                 app.update = Some(crate::updates::Release {
                     version: "99.0.0".to_owned(),
                     url: "https://github.com/crmne/zapfast/releases/latest".to_owned(),
@@ -1909,13 +1906,9 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         received: 8_000_000,
                         total: 20_000_000,
                     },
-                    "update-ready" => DownloadState::Ready(Box::new(Prepared {
-                        installation,
-                        directory: "/demo/staging".into(),
-                        payload: "/demo/staging/next".into(),
-                        sha256: String::new(),
-                        version: "99.0.0".into(),
-                    })),
+                    "update-ready" => {
+                        DownloadState::Ready(Box::new(Prepared::sample(installation, "99.0.0")))
+                    }
                     "update-failed" => DownloadState::Failed(
                         "The download could not be verified. Try downloading it again.".into(),
                     ),

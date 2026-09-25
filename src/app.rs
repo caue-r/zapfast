@@ -405,7 +405,7 @@ pub struct App {
     last_update_check: Option<Instant>,
     pub show_update: bool,
     pub update_download: crate::updates::DownloadState,
-    pub update_support: Option<Result<crate::updates::install::Installation, String>>,
+    pub update_support: Option<Result<crate::updates::Installation, String>>,
     update_inspecting: bool,
     pub update_arguments: Vec<String>,
     /// Whether to scroll the conversation to its newest message.
@@ -3076,7 +3076,7 @@ impl App {
             };
             self.backend.send(Command::DownloadUpdate {
                 release,
-                source: crate::updates::Source::GitHub,
+                source: crate::updates::Source::github(),
             });
         }
     }
@@ -6350,10 +6350,7 @@ mod tests {
 
     #[test]
     fn automatic_updates_require_opt_in_and_explicit_restart() {
-        use crate::updates::{
-            DownloadState,
-            install::{Installation, Kind, Prepared},
-        };
+        use crate::updates::{DownloadState, Installation, Kind, Prepared};
         let mut app = app();
         let ctx = egui::Context::default();
         app.update = Some(crate::updates::Release {
@@ -6378,13 +6375,8 @@ mod tests {
             app.update_download,
             DownloadState::Downloading { .. }
         ));
-        app.update_download = DownloadState::Ready(Box::new(Prepared {
-            installation,
-            directory: "/fixture/staging".into(),
-            payload: "/fixture/staging/next".into(),
-            sha256: String::new(),
-            version: "99.0.0".into(),
-        }));
+        app.update_download =
+            DownloadState::Ready(Box::new(Prepared::sample(installation, "99.0.0")));
         app.maybe_download_update();
         assert!(matches!(app.update_download, DownloadState::Ready(_)));
         assert!(!app.quit_requested);

@@ -94,9 +94,13 @@ protocol. These notes are for coding agents and new contributors.
 - Chat ids are canonical strings: a chat behind a privacy id (`@lid`) is
   filed under its phone number once the mapping is known. Use
   `Worker::canonical` for anything that arrives as a `Jid`.
-- `src/updates/` downloads verified GitHub releases and hands installation to a
-  helper after an explicit restart action. Keep package-manager detection, asset
-  checksums, startup acknowledgement and rollback intact. Portable releases carry
+- Updates come from fastframe-update: `src/updates.rs` holds ZapFast's
+  `UpdateConfig` (legacy `fastsapp` names, the publisher key) and the
+  proxy-aware client. It downloads verified GitHub releases and hands
+  installation to a helper after an explicit restart action. `main` calls
+  `fastframe_update::intercept` before anything else, so `--apply-update`,
+  `--update-receipt` and `--update-error` keep working with older releases'
+  helpers (`tests/update_flags.rs`). Portable releases carry
   `packaging/zapfast-portable.txt`; the Windows installer has its own marker.
 - Custom themes come from fastframe-theme (`theme::Catalog`, ZapFast's
   `fastframe_theme::Palette` impl in `src/theme.rs`): it scans local JSON
