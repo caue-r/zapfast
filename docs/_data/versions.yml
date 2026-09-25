@@ -1,7 +1,7 @@
-current: v0.16.4
+current: v0.16.5
 items:
-  - id: v0.16.4
-    title: v0.16.4
+  - id: v0.16.5
+    title: v0.16.5
     url: /download/
   - title: Changelog
     url: https://github.com/crmne/zapfast/releases
