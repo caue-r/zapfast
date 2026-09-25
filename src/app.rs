@@ -537,6 +537,13 @@ impl App {
         app.badge = Some(Default::default());
         app.custom_themes.enable_desktop_themes();
         app.load_custom_themes();
+        // Reading the desktop's font settings may wait on D-Bus; keep it off
+        // the first frame.
+        let text_waker = waker.clone();
+        std::thread::Builder::new()
+            .name("text-rendering".into())
+            .spawn(move || crate::theme::follow_text_rendering(move || text_waker.wake()))
+            .ok();
         if options.tray {
             let waker = waker.clone();
             app.tray = TrayService::spawn(move || waker.wake());
@@ -3083,6 +3090,9 @@ impl App {
                 Palette::light()
             }
         });
+        if crate::theme::apply_text_rendering_change(ctx) {
+            self.applied_dark = None;
+        }
         if self.applied_dark.is_none() || self.palette != palette {
             self.palette = palette;
             crate::theme::apply(ctx, &self.palette);

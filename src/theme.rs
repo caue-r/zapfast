@@ -207,11 +207,10 @@ pub fn apply(ctx: &egui::Context, palette: &Palette) {
         egui::Visuals::light()
     };
     visuals.dark_mode = palette.dark;
-    // Glyph coverage as the rasterizer produced it, in both themes. egui's
-    // dark default (2c - c²) thickens light text on dark backgrounds, while
-    // the desktop (FreeType and cairo, GTK, browsers) draws coverage as is;
-    // side by side ZapFast's text looked heavier and blurrier than the rest.
-    visuals.text_options.color_transfer_function = egui::epaint::FontColorTransferFunction::Off;
+    // Hinting, sub-pixel positions and glyph coverage as the desktop draws
+    // them. On Linux coverage stays linear in both themes, as FreeType and
+    // cairo draw it; egui's dark curve (2c - c²) made text heavier than GTK's.
+    text_rendering().apply_to_visuals(visuals);
     visuals.panel_fill = palette.panel;
     visuals.window_fill = palette.overlay;
     visuals.extreme_bg_color = palette.surface;
@@ -304,9 +303,65 @@ pub fn apply(ctx: &egui::Context, palette: &Palette) {
 }
 
 /// Inter at four weights, egui's own fonts behind it, and installed fonts
-/// for the scripts Inter lacks.
+/// for the scripts Inter lacks, hinted as the desktop asks.
 fn install_fonts(ctx: &egui::Context) {
-    fastframe_fonts::FontSetup::default().install(ctx);
+    let mut fonts = fastframe_fonts::FontSetup::default().definitions();
+    text_rendering().apply_to(&mut fonts);
+    ctx.set_fonts(fonts);
+}
+
+/// The desktop's text rendering: read once, on the first window, and kept
+/// current by [`follow_text_rendering`].
+static TEXT_RENDERING: std::sync::Mutex<Option<fastframe_text::TextRendering>> =
+    std::sync::Mutex::new(None);
+
+/// Set when the desktop's text rendering changed and no window has applied
+/// it yet.
+static TEXT_RENDERING_CHANGED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// How the desktop draws text. The first call reads its settings, which can
+/// block for about a second on Linux when the desktop portal does not answer;
+/// tests use the platform's defaults, so the machine does not decide them.
+pub fn text_rendering() -> fastframe_text::TextRendering {
+    *TEXT_RENDERING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(|| {
+            if cfg!(test) {
+                fastframe_text::TextRendering::platform_default()
+            } else {
+                fastframe_text::detect()
+            }
+        })
+}
+
+/// Follows changes to the desktop's font settings (the desktop portal on
+/// Linux) and calls `wake` so a window picks them up through
+/// [`apply_text_rendering_change`]. Elsewhere, and without a portal, the
+/// settings read at start stay.
+pub fn follow_text_rendering(wake: impl Fn() + Send + 'static) {
+    let current = text_rendering();
+    let watched = fastframe_text::watch::watch(current, move |rendering| {
+        *TEXT_RENDERING
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(rendering);
+        TEXT_RENDERING_CHANGED.store(true, std::sync::atomic::Ordering::Release);
+        wake();
+    });
+    if let Err(error) = watched {
+        log::debug!("not following the desktop's font settings: {error}");
+    }
+}
+
+/// Reinstalls the fonts when the desktop's text rendering changed since the
+/// last call. Returns whether it did, so the caller reapplies its visuals.
+pub fn apply_text_rendering_change(ctx: &egui::Context) -> bool {
+    let changed = TEXT_RENDERING_CHANGED.swap(false, std::sync::atomic::Ordering::AcqRel);
+    if changed {
+        install_fonts(ctx);
+    }
+    changed
 }
 
 fastframe_icons::icons! {
@@ -833,19 +888,26 @@ pub fn titlebar_inset(ctx: &egui::Context) -> f32 {
 mod tests {
     use super::*;
 
+    /// The palette decides the theme, and the desktop's rendering its text
+    /// options: linear coverage in both themes on Linux, as GTK draws it.
     #[test]
-    fn text_coverage_is_linear_in_both_themes() {
+    fn text_follows_the_desktop_rendering_in_both_themes() {
+        let rendering = text_rendering();
         for palette in [Palette::dark(), Palette::light()] {
             let ctx = egui::Context::default();
             apply(&ctx, &palette);
+            let options = ctx.global_style().visuals.text_options;
             assert_eq!(
-                ctx.global_style()
-                    .visuals
-                    .text_options
-                    .color_transfer_function,
-                egui::epaint::FontColorTransferFunction::Off,
+                options.color_transfer_function,
+                rendering.color_transfer_function(palette.dark),
                 "dark: {}",
                 palette.dark
+            );
+            assert_eq!(options.subpixel_binning, rendering.subpixel_positioning);
+            #[cfg(target_os = "linux")]
+            assert_eq!(
+                options.color_transfer_function,
+                egui::epaint::FontColorTransferFunction::Off
             );
         }
     }

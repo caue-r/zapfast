@@ -330,7 +330,9 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   link when a newer release is available. You can turn this off in Settings.
 - **Themes.** Light, dark, follow the system, or a local JSON palette. Native
   Linux packages can follow Omarchy colors without restarting the app. Zoom with
-  Ctrl+plus and Ctrl+minus.
+  Ctrl+plus and Ctrl+minus. On Linux text is hinted and antialiased as the
+  desktop asks (its font settings through the desktop portal, else
+  fontconfig), and follows changes to them without a restart.
 - **Copy text.** Select part of a message or copy across messages in
   WhatsApp's `[time, date] Name:` format. Contact names and numbers are also
   selectable, with Brazilian numbers shown as `(DDD) XXXX-XXXX` or
