@@ -107,7 +107,8 @@ protocol. These notes are for coding agents and new contributors.
   without opening a window.
 - `src/theme.rs` owns colours, fonts, and icons; `src/ui/widgets.rs` the
   shared controls. New icons go in `assets/icons/` as 24px Lucide-style SVGs
-  and in the `icons!` table.
+  and in the `fastframe_icons::icons!` table; an icon fastframe-icons already
+  ships is named there as `lucide "name"` instead of copied.
 - `src/markup.rs` turns WhatsApp's text markup, links, and mentions into an
   egui `LayoutJob`; `src/emoji.rs` swaps every emoji for a placeholder
   glyph at layout time and paints the desktop's colour emoji bitmap over

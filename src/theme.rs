@@ -191,8 +191,10 @@ pub fn bold(size: f32) -> egui::FontId {
 /// Installs fonts, icons, and base style.
 pub fn install(ctx: &egui::Context) {
     install_fonts(ctx);
-    register_icons(ctx);
     egui_extras::install_image_loaders(ctx);
+    // Served by a loader that never forgets them, so `reduce_texture_memory`
+    // below cannot leave an icon drawn at two sizes without bytes.
+    fastframe_icons::install::<Icon>(ctx);
     // Drop the raw bytes and the decoded pixels once a texture is on the GPU.
     // egui keeps all three copies of every image otherwise, and only ever
     // evicts the textures of SVGs.
@@ -358,225 +360,88 @@ fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-macro_rules! icons {
-    ($($variant:ident => $file:literal),* $(,)?) => {
-        &[$((
-            Icon::$variant,
-            concat!("bytes://zapfast-icon-", $file, ".svg"),
-            include_bytes!(concat!("../assets/icons/", $file, ".svg")).as_slice(),
-        )),*]
-    };
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Icon {
-    Archive,
-    ArrowDown,
-    ArrowLeft,
-    Ban,
-    Bell,
-    BellOff,
-    Calendar,
-    Check,
-    CheckCheck,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    ChevronUp,
-    ListChecks,
-    CircleAlert,
-    CircleCheck,
-    CircleX,
-    Clock,
-    Contact,
-    Copy,
-    Download,
-    Timer,
-    Ellipsis,
-    ExternalLink,
-    Eye,
-    EyeOff,
-    FileText,
-    Forward,
-    Gif,
-    Heart,
-    Image,
-    Info,
-    Keyboard,
-    Lock,
-    LockOpen,
-    LogOut,
-    MapPin,
-    Maximize,
-    MessageCircle,
-    Mic,
-    Minimize,
-    Minus,
-    Monitor,
-    Moon,
-    PanelLeft,
-    Paperclip,
-    Pause,
-    Pencil,
-    Phone,
-    Pin,
-    PinOff,
-    Play,
-    Plus,
-    QrCode,
-    Refresh,
-    Reply,
-    Search,
-    Send,
-    Settings,
-    Smartphone,
-    Smile,
-    SquarePen,
-    Star,
-    StarOff,
-    Sticker,
-    Sun,
-    Tag,
-    Trash,
-    User,
-    Users,
-    Video,
-    Volume2,
-    VolumeX,
-    WifiOff,
-    X,
-}
-
-const ICONS: &[(Icon, &str, &[u8])] = icons! {
-    Archive => "archive",
-    ArrowDown => "arrow-down",
-    ArrowLeft => "arrow-left",
-    Ban => "ban",
-    Bell => "bell",
-    BellOff => "bell-off",
-    Calendar => "calendar",
-    Check => "check",
-    CheckCheck => "check-check",
-    ChevronDown => "chevron-down",
-    ChevronLeft => "chevron-left",
-    ChevronRight => "chevron-right",
-    ChevronUp => "chevron-up",
-    ListChecks => "list-checks",
-    CircleAlert => "circle-alert",
-    CircleCheck => "circle-check",
-    CircleX => "circle-x",
-    Clock => "clock",
-    Contact => "contact",
-    Copy => "copy",
-    Download => "download",
-    Timer => "timer",
-    Ellipsis => "ellipsis",
-    ExternalLink => "external-link",
-    Eye => "eye",
-    EyeOff => "eye-off",
-    FileText => "file-text",
-    Forward => "forward",
-    Gif => "gif",
-    Heart => "heart",
-    Image => "image",
-    Info => "info",
-    Keyboard => "keyboard",
-    Lock => "lock",
-    LockOpen => "lock-open",
-    LogOut => "log-out",
-    MapPin => "map-pin",
-    Maximize => "maximize-2",
-    MessageCircle => "message-circle",
-    Mic => "mic",
-    Minimize => "minimize-2",
-    Minus => "minus",
-    Monitor => "monitor",
-    Moon => "moon",
-    PanelLeft => "panel-left",
-    Paperclip => "paperclip",
-    Pause => "pause",
-    Pencil => "pencil",
-    Phone => "phone",
-    Pin => "pin",
-    PinOff => "pin-off",
-    Play => "play",
-    Plus => "plus",
-    QrCode => "qr-code",
-    Refresh => "refresh-cw",
-    Reply => "reply",
-    Search => "search",
-    Send => "send",
-    Settings => "settings",
-    Smartphone => "smartphone",
-    Smile => "smile",
-    SquarePen => "square-pen",
-    Star => "star",
-    StarOff => "star-off",
-    Sticker => "sticker",
-    Sun => "sun",
-    Tag => "tag",
-    Trash => "trash-2",
-    User => "user",
-    Users => "users",
-    Video => "video",
-    Volume2 => "volume-2",
-    VolumeX => "volume-x",
-    WifiOff => "wifi-off",
-    X => "x",
-};
-
-impl Icon {
-    pub fn uri(self) -> &'static str {
-        ICONS
-            .iter()
-            .find(|(icon, _, _)| *icon == self)
-            .map_or("", |(_, uri, _)| *uri)
+fastframe_icons::icons! {
+    /// Every icon the interface draws. Icons Spotifast ships too come from
+    /// fastframe-icons (`lucide`); the rest are ZapFast's own files.
+    pub enum Icon {
+        prefix: "zapfast-icon-",
+        directory: "../assets/icons/",
+        Archive => "archive",
+        ArrowDown => "arrow-down",
+        ArrowLeft => lucide "arrow-left",
+        Ban => "ban",
+        Bell => "bell",
+        BellOff => "bell-off",
+        Calendar => "calendar",
+        Check => lucide "check",
+        CheckCheck => "check-check",
+        ChevronDown => lucide "chevron-down",
+        ChevronLeft => lucide "chevron-left",
+        ChevronRight => lucide "chevron-right",
+        ChevronUp => lucide "chevron-up",
+        ListChecks => "list-checks",
+        CircleAlert => lucide "circle-alert",
+        CircleCheck => lucide "circle-check",
+        CircleX => lucide "circle-x",
+        Clock => lucide "clock",
+        Contact => "contact",
+        Copy => lucide "copy",
+        Download => "download",
+        Timer => "timer",
+        Ellipsis => lucide "ellipsis",
+        ExternalLink => lucide "external-link",
+        Eye => lucide "eye",
+        EyeOff => lucide "eye-off",
+        FileText => "file-text",
+        Forward => "forward",
+        Gif => "gif",
+        Heart => "heart",
+        Image => "image",
+        Info => lucide "info",
+        Keyboard => "keyboard",
+        Lock => lucide "lock",
+        LockOpen => "lock-open",
+        LogOut => lucide "log-out",
+        MapPin => "map-pin",
+        Maximize => lucide "maximize-2",
+        MessageCircle => "message-circle",
+        Mic => lucide "mic",
+        Minimize => lucide "minimize-2",
+        Minus => lucide "minus",
+        Monitor => lucide "monitor",
+        Moon => lucide "moon",
+        PanelLeft => lucide "panel-left",
+        Paperclip => "paperclip",
+        Pause => lucide "pause",
+        Pencil => lucide "pencil",
+        Phone => "phone",
+        Pin => lucide "pin",
+        PinOff => lucide "pin-off",
+        Play => lucide "play",
+        Plus => lucide "plus",
+        QrCode => "qr-code",
+        Refresh => lucide "refresh-cw",
+        Reply => "reply",
+        Search => lucide "search",
+        Send => "send",
+        Settings => lucide "settings",
+        Smartphone => lucide "smartphone",
+        Smile => "smile",
+        SquarePen => lucide "square-pen",
+        Star => "star",
+        StarOff => "star-off",
+        Sticker => "sticker",
+        Sun => lucide "sun",
+        Tag => "tag",
+        Trash => lucide "trash-2",
+        User => lucide "user",
+        Users => lucide "users",
+        Video => "video",
+        Volume2 => lucide "volume-2",
+        VolumeX => lucide "volume-x",
+        WifiOff => "wifi-off",
+        X => lucide "x",
     }
-
-    pub fn image(self, color: Color32, size: f32) -> egui::Image<'static> {
-        egui::Image::new(self.uri())
-            .tint(color)
-            .fit_to_exact_size(Vec2::splat(size))
-    }
-}
-
-/// Serves the embedded icon SVGs for the life of the context.
-///
-/// `reduce_texture_memory` makes egui drop an image's bytes once its texture
-/// is uploaded. An icon drawn at more than one size loses that texture when
-/// egui prunes the extra size variants, and with the bytes gone the next draw
-/// finds neither and paints egui's red "failed" placeholder. A loader whose
-/// `forget` does nothing keeps them: the icons are 71 small SVGs, so holding
-/// them costs nothing next to a single photo.
-struct IconBytes;
-
-impl egui::load::BytesLoader for IconBytes {
-    fn id(&self) -> &str {
-        egui::generate_loader_id!(IconBytes)
-    }
-
-    fn load(&self, _: &egui::Context, uri: &str) -> egui::load::BytesLoadResult {
-        match ICONS.iter().find(|(_, icon, _)| *icon == uri) {
-            Some((_, _, bytes)) => Ok(egui::load::BytesPoll::Ready {
-                size: None,
-                bytes: (*bytes).into(),
-                mime: Some("image/svg+xml".to_owned()),
-            }),
-            None => Err(egui::load::LoadError::NotSupported),
-        }
-    }
-
-    fn forget(&self, _uri: &str) {}
-
-    fn forget_all(&self) {}
-
-    fn byte_size(&self) -> usize {
-        ICONS.iter().map(|(_, _, bytes)| bytes.len()).sum()
-    }
-}
-
-fn register_icons(ctx: &egui::Context) {
-    ctx.add_bytes_loader(std::sync::Arc::new(IconBytes));
 }
 
 /// A static icon.
@@ -1055,46 +920,6 @@ mod tests {
             );
         });
         output.textures_delta.clear();
-    }
-
-    #[test]
-    fn every_icon_has_a_file() {
-        for (icon, uri, bytes) in ICONS {
-            assert!(!bytes.is_empty(), "{icon:?} is empty");
-            assert!(uri.ends_with(".svg"));
-            assert_eq!(icon.uri(), *uri);
-        }
-    }
-
-    /// egui drops an image's bytes after the texture upload when
-    /// `reduce_texture_memory` is on, and then prunes the SVG's extra size
-    /// variants. A loader that survives both is what keeps an icon that is
-    /// drawn at two sizes from falling back to egui's red placeholder.
-    #[test]
-    fn icon_bytes_outlive_forgetting() {
-        use egui::load::{BytesLoader as _, BytesPoll};
-        let loader = IconBytes;
-        let (icon, uri, bytes) = ICONS[0];
-        let served =
-            |loader: &IconBytes, uri: &str| match loader.load(&egui::Context::default(), uri) {
-                Ok(BytesPoll::Ready { bytes, .. }) => Some(bytes),
-                _ => None,
-            };
-        let loaded = served(&loader, uri).expect("the icon loader serves every icon");
-        assert_eq!(&*loaded, bytes, "{icon:?} bytes differ");
-        loader.forget(uri);
-        loader.forget_all();
-        assert!(
-            served(&loader, uri).is_some(),
-            "{icon:?} must survive a forget"
-        );
-        assert!(
-            matches!(
-                loader.load(&egui::Context::default(), "bytes://zapfast-icon-nope.svg"),
-                Err(egui::load::LoadError::NotSupported)
-            ),
-            "other URIs must fall through to the default loader"
-        );
     }
 
     fn assert_readable(name: &str, pairs: &[(&str, Color32, Color32)], target: f32) {
