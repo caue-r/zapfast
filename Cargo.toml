@@ -36,7 +36,6 @@ clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
-env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
 directories = "6"
 # UI framework. glow avoids the larger wgpu dependency.
 eframe = { version = "0.36", default-features = false, features = ["accesskit", "glow", "default_fonts", "links", "wayland", "x11", "persistence"] }
@@ -132,6 +131,8 @@ fastframe-fonts = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d31
 fastframe-text = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c", features = ["watch"] }
 # Palette files, the shared presets, and following Omarchy's theme live.
 fastframe-theme = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c" }
+# Logs to stderr and a per-run file, and records panics without their payload.
+fastframe-log = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c" }
 
 [patch.crates-io]
 # crmne/egui apps-0.36, shared with Spotifast, RekordFlash and TonePush: egui
@@ -199,6 +200,9 @@ winresource = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
+# Checks the default log filter the way fastframe-log's logger reads it.
+# Already in the tree through fastframe-log, at this version.
+env_logger = { version = "0.11", default-features = false }
 # Creates small APNGs in sticker-import tests. Already included through image.
 png = "0.18"
 

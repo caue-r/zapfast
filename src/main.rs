@@ -194,39 +194,20 @@ fn main() -> eframe::Result<()> {
     // directories have been created and secured successfully.
     dirs.ensure()
         .map_err(|error| eframe::Error::AppCreation(error.into()))?;
-    let mut logger =
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter));
+    let logging = fastframe_log::Logging::new("zapfast", env!("CARGO_PKG_VERSION"))
+        .filter(default_filter)
+        .panic_log(dirs.panic_log())
+        .redact(redact_protocol);
     // Write desktop-session logs to disk. Demo runs use stderr so they do not
     // replace a live session's log.
-    if !demo {
-        match std::fs::File::create(dirs.log_file()) {
-            Ok(file) => {
-                logger.target(env_logger::Target::Pipe(Box::new(Tee(file))));
-            }
-            Err(error) => eprintln!("not keeping a log file: {error}"),
-        }
-    }
-    logger.format(|buffer, record| {
-        use std::io::Write;
-        let message = record.args().to_string();
-        let message = if zapfast::diagnostics::is_protocol_target(record.target())
-            || zapfast::diagnostics::is_protocol_target(record.module_path().unwrap_or_default())
-        {
-            zapfast::diagnostics::protocol_summary(&message)
-        } else {
-            &message
-        };
-        writeln!(
-            buffer,
-            "[{} {} {}] {}",
-            buffer.timestamp(),
-            record.level(),
-            record.target(),
-            message
-        )
-    });
-    logger.init();
-    log_panics(dirs.panic_log());
+    let logging = if demo {
+        logging
+    } else {
+        logging.file(dirs.log_file())
+    };
+    logging
+        .init()
+        .map_err(|error| eframe::Error::AppCreation(error.into()))?;
     let settings = settings::Settings::load(&dirs.settings_file());
     let demo_persistence = demo.then(|| dirs.state.join("window.ron"));
 
@@ -388,46 +369,16 @@ fn main() -> eframe::Result<()> {
     Ok(())
 }
 
-/// Logger that writes to stderr and the current-run log file.
-struct Tee(std::fs::File);
-
-impl std::io::Write for Tee {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let _ = std::io::stderr().write_all(buf);
-        self.0.write_all(buf)?;
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        let _ = std::io::stderr().flush();
-        self.0.flush()
-    }
-}
-
-/// Writes panics to `path` before process exit.
-fn log_panics(path: std::path::PathBuf) {
-    std::panic::set_hook(Box::new(move |info| {
-        let thread = std::thread::current();
-        let entry = format!(
-            "{} zapfast {} on thread {:?}, panic at {} (payload omitted)\n",
-            jiff::Timestamp::now(),
-            env!("CARGO_PKG_VERSION"),
-            thread.name().unwrap_or("unnamed"),
-            info.location().map_or_else(
-                || "unknown location".to_owned(),
-                |location| location.to_string()
-            ),
-        );
-        eprint!("{entry}");
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path);
-        if let Ok(mut file) = file {
-            use std::io::Write;
-            let _ = file.write_all(entry.as_bytes());
-        }
-    }));
+/// Summarises the WhatsApp library's lines, which can quote protocol
+/// payloads, into fixed categories.
+fn redact_protocol(
+    record: &log::Record<'_>,
+    message: &str,
+) -> Option<std::borrow::Cow<'static, str>> {
+    use zapfast::diagnostics::{is_protocol_target, protocol_summary};
+    (is_protocol_target(record.target())
+        || is_protocol_target(record.module_path().unwrap_or_default()))
+    .then(|| protocol_summary(message).into())
 }
 
 /// Parses `--demo-size WxH`.
