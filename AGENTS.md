@@ -225,10 +225,11 @@ protocol. These notes are for coding agents and new contributors.
   on sets `hide_intent`, the window is destroyed, and a headless loop keeps
   calling `App::background_frame` (the link, the archive, the tray) until
   the tray, a clicked notification, or another launch sets `wants_show`,
-  when a new window is made. `src/tray.rs` is the Linux status notifier
-  (ksni), `src/tray_native.rs` the Windows and macOS item (tray-icon; on
-  macOS made with the first window and pumped by `tray::idle` while none
-  exists). `src/single_instance.rs` holds a lock file in the runtime
+  when a new window is made. The tray item is fastframe-tray (ksni on
+  Linux, tray-icon on Windows and macOS; on macOS made with the first window
+  and pumped by `fastframe_tray::idle` while none exists), and `src/macos.rs`
+  hands its menu events to `fastframe_tray::claim_menu_event` first.
+  `src/single_instance.rs` holds a lock file in the runtime
   directory, and a second launch asks the first to surface over a private
   socket (a token-checked loopback port on Windows). `src/notify.rs` sends desktop notifications
   for `Event::Incoming` (live messages from others, not history) when the

@@ -133,6 +133,8 @@ fastframe-text = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310
 fastframe-theme = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c" }
 # Logs to stderr and a per-run file, and records panics without their payload.
 fastframe-log = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c" }
+# The tray item: StatusNotifier on Linux, tray-icon on Windows and macOS.
+fastframe-tray = { git = "https://github.com/crmne/fastframe", rev = "81e7d2d310052c360f0827957461da7e4ca80f7c" }
 
 [patch.crates-io]
 # crmne/egui apps-0.36, shared with Spotifast, RekordFlash and TonePush: egui
@@ -163,23 +165,20 @@ winit = { git = "https://github.com/crmne/winit", rev = "fc4f39ff0993dd235952b74
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-tokio-crypto-rust"] }
-# Linux status-notifier tray item over D-Bus.
-ksni = { version = "0.3", features = ["blocking"] }
 # Pauses MPRIS media players while recording or playing voice messages, and
 # emits the Unity Launcher API signal launchers show as a taskbar badge.
-# Already in the tree through notify-rust and ksni.
+# Already in the tree through notify-rust and fastframe-tray.
 zbus = { version = "5.19", default-features = false, features = ["blocking-api", "tokio"] }
 # Reads the time locale's clock format.
 libc = "0.2"
 
-[target.'cfg(not(target_os = "linux"))'.dependencies]
-# Windows and macOS tray item.
-tray-icon = { version = "0.24", default-features = false }
-
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
-# Pumps AppKit without a window. The status item and Dock reopen callback must
-# stay on the main thread.
+# The application menu bar, built with tray-icon's muda at the version
+# fastframe-tray uses.
+tray-icon = { version = "0.24", default-features = false }
+# AppKit calls for the application menus and editing commands, on the main
+# thread.
 objc2 = "0.6"
 raw-window-handle = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSEvent", "NSGraphicsContext", "NSMenu", "NSMenuItem", "NSResponder", "NSRunningApplication", "NSText", "NSView", "NSWindow"] }
@@ -188,8 +187,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 [target.'cfg(windows)'.dependencies]
 windows-native-keyring-store = { version = "1.1", default-features = false }
 winrt-notification = { package = "tauri-winrt-notification", version = "0.7.3" }
-# Windows tray-thread message loop.
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Threading", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging"] }
+# Registry, locale and process calls.
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Threading", "Win32_System_Registry"] }
 # Pauses other apps' media through the system media transport controls while
 # recording or playing voice messages. The same version cpal already uses.
 windows = { version = "0.62", features = ["Media_Control", "Foundation_Collections"] }

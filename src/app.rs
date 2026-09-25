@@ -20,7 +20,6 @@ use crate::paths::AppDirs;
 use crate::settings::{NotificationSound, Settings, ThemeChoice};
 use crate::single_instance::{ControlCommand, Guard};
 use crate::theme::{self, Palette};
-use crate::tray::{TrayCommand, TrayService};
 
 /// Initial and incremental message-page size.
 pub const PAGE: usize = 60;
@@ -431,7 +430,7 @@ pub struct App {
     pub start_with_system: Option<bool>,
     /// Cross-thread window repaint handle.
     waker: Waker,
-    tray: Option<TrayService>,
+    tray: Option<fastframe_tray::Tray>,
     /// Whether the app is running without a window.
     pub window_hidden: bool,
     /// Whether window close should keep the process running.
@@ -515,6 +514,40 @@ impl Pending {
     }
 }
 
+const TRAY_SHOW: &str = "show";
+const TRAY_QUIT: &str = "quit";
+
+/// What a tray click asks for: a left click on Linux and macOS, or the menu's
+/// first entry, toggles the window; a left click on Windows and a Dock click
+/// on macOS show it.
+fn tray_action(event: fastframe_tray::Event, window_hidden: bool) -> Option<Action> {
+    use fastframe_tray::Event;
+    Some(match event {
+        Event::Show => Action::ShowWindow,
+        Event::Toggle | Event::Menu(TRAY_SHOW) if window_hidden => Action::ShowWindow,
+        Event::Toggle | Event::Menu(TRAY_SHOW) => Action::HideWindow,
+        Event::Menu(TRAY_QUIT) => Action::Quit,
+        Event::Menu(_) => return None,
+    })
+}
+
+/// The tray item: ZapFast's icon, and a menu to show or hide the window and
+/// to quit.
+fn tray_config() -> fastframe_tray::Config {
+    use fastframe_tray::MenuItem;
+    fastframe_tray::Config {
+        id: "zapfast",
+        title: "ZapFast".into(),
+        icon: crate::util::app_icon_rgba,
+        template_icon: Some(crate::util::tray_template_rgba),
+        menu: vec![
+            MenuItem::action(TRAY_SHOW, "Show or hide ZapFast"),
+            MenuItem::Separator,
+            MenuItem::action(TRAY_QUIT, "Quit"),
+        ],
+    }
+}
+
 /// Process-level app services.
 #[derive(Clone, Copy, Debug)]
 pub struct AppOptions {
@@ -547,7 +580,7 @@ impl App {
             .ok();
         if options.tray {
             let waker = waker.clone();
-            app.tray = TrayService::spawn(move || waker.wake());
+            app.tray = fastframe_tray::Tray::spawn(tray_config(), move || waker.wake());
         }
         // The clock preference may run a helper on Linux; keep it off the
         // first frame.
@@ -797,9 +830,6 @@ impl App {
         self.window_focused = false;
         self.hide_intent = false;
         self.wants_show = false;
-        if let Some(tray) = &mut self.tray {
-            tray.hidden();
-        }
     }
 
     /// Whether window close keeps the app in the tray.
@@ -808,20 +838,15 @@ impl App {
     }
 
     fn handle_tray(&mut self) {
-        let Some(commands) = self.tray.as_ref().map(TrayService::drain_commands) else {
+        let Some(events) = self.tray.as_ref().map(fastframe_tray::Tray::events) else {
             return;
         };
-        for command in commands {
-            match command {
-                TrayCommand::Show => self.actions.push(Action::ShowWindow),
-                TrayCommand::ShowHide => self.actions.push(if self.window_hidden {
-                    Action::ShowWindow
-                } else {
-                    Action::HideWindow
-                }),
-                TrayCommand::Quit => self.actions.push(Action::Quit),
-            }
-        }
+        let hidden = self.window_hidden;
+        self.actions.extend(
+            events
+                .into_iter()
+                .filter_map(|event| tray_action(event, hidden)),
+        );
     }
 
     fn handle_control_commands(&mut self) {
@@ -6188,6 +6213,39 @@ mod tests {
                 assert_eq!(ctx.theme(), theme);
             }
         }
+    }
+
+    #[test]
+    fn tray_clicks_show_hide_and_quit() {
+        use fastframe_tray::Event;
+        assert!(matches!(
+            super::tray_action(Event::Show, false),
+            Some(Action::ShowWindow)
+        ));
+        for event in [Event::Toggle, Event::Menu(super::TRAY_SHOW)] {
+            assert!(matches!(
+                super::tray_action(event, true),
+                Some(Action::ShowWindow)
+            ));
+            assert!(matches!(
+                super::tray_action(event, false),
+                Some(Action::HideWindow)
+            ));
+        }
+        assert!(matches!(
+            super::tray_action(Event::Menu(super::TRAY_QUIT), false),
+            Some(Action::Quit)
+        ));
+        assert!(super::tray_action(Event::Menu("other"), false).is_none());
+        let menu = super::tray_config().menu;
+        assert_eq!(
+            menu,
+            [
+                fastframe_tray::MenuItem::action(super::TRAY_SHOW, "Show or hide ZapFast"),
+                fastframe_tray::MenuItem::Separator,
+                fastframe_tray::MenuItem::action(super::TRAY_QUIT, "Quit"),
+            ]
+        );
     }
 
     #[test]

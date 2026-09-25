@@ -160,7 +160,7 @@ msgstr "Заблокированные"
 msgid "No favorites yet"
 msgstr "Пока нет избранных"
 
-#: src/ui/chats.rs:772 src/app.rs:1223
+#: src/ui/chats.rs:772 src/app.rs:1248
 msgid "Message yourself"
 msgstr "Написать себе"
 
@@ -846,25 +846,25 @@ msgstr[2] "ещё {}"
 msgid "No one yet"
 msgstr "Пока никто"
 
-#: src/app.rs:1144
+#: src/app.rs:1169
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr "Метка «{name}» уже есть."
 
-#: src/app.rs:1204
+#: src/app.rs:1229
 #, rust-format
 msgid "{name} (You)"
 msgstr "{name} (Вы)"
 
-#: src/app.rs:1205 src/app.rs:1224
+#: src/app.rs:1230 src/app.rs:1249
 msgid "You"
 msgstr "Вы"
 
-#: src/app.rs:2448
+#: src/app.rs:2473
 msgid "Not sent: ZapFast is not connected to WhatsApp."
 msgstr "Не отправлено: ZapFast не подключён к WhatsApp."
 
-#: src/app.rs:2452
+#: src/app.rs:2477
 msgid ""
 "Not sent: the message you’re replying to isn’t available on this computer. "
 "Cancel the reply to send without a quote."
@@ -872,28 +872,28 @@ msgstr ""
 "Не отправлено: сообщение, на которое вы отвечаете, недоступно на этом "
 "компьютере. Отмените ответ, чтобы отправить без цитаты."
 
-#: src/app.rs:3770
+#: src/app.rs:3795
 msgid "Added to favorites"
 msgstr "Добавлено в избранное"
 
-#: src/app.rs:3845
+#: src/app.rs:3870
 msgid "Sending the sticker pack…"
 msgstr "Отправка набора стикеров…"
 
-#: src/app.rs:4130 src/ui/labels.rs:237
+#: src/app.rs:4155 src/ui/labels.rs:237
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr "У вас {limit} меток — больше ZapFast не хранит."
 
-#: src/app.rs:4653
+#: src/app.rs:4678
 msgid "This video opens in your system player"
 msgstr "Это видео откроется в системном плеере"
 
-#: src/app.rs:5136
+#: src/app.rs:5161
 msgid "Copied image"
 msgstr "Изображение скопировано"
 
-#: src/app.rs:5139 src/app.rs:5144
+#: src/app.rs:5164 src/app.rs:5169
 msgid "Failed to copy image"
 msgstr "Не удалось скопировать изображение"
 

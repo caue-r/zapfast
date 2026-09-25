@@ -114,6 +114,10 @@ pub fn attach(ctx: &egui::Context) {
     }
     *REPAINT.lock().unwrap_or_else(|p| p.into_inner()) = Some(ctx.clone());
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        // The tray's menu shares muda's one handler; its ids are its own.
+        if fastframe_tray::claim_menu_event(&event.id.0) {
+            return;
+        }
         if native_edit(&event.id.0) {
             return;
         }
@@ -213,7 +217,7 @@ fn edit_event(id: &str) -> Option<egui::Event> {
     })
 }
 
-fn action(id: &str, hidden: bool) -> Option<Action> {
+fn action(id: &str) -> Option<Action> {
     Some(match id {
         "about" => Action::ShowDialog(Dialog::About),
         "settings" => Action::Open(Page::Settings),
@@ -228,14 +232,6 @@ fn action(id: &str, hidden: bool) -> Option<Action> {
         "shortcuts" => Action::ShowDialog(Dialog::Shortcuts),
         "help" => Action::OpenUrl("https://zapfast.rocks/using-zapfast/".into()),
         "show-window" => Action::ShowWindow,
-        // These two ids are shared with the native tray menu.
-        "show" => {
-            if hidden {
-                Action::ShowWindow
-            } else {
-                Action::HideWindow
-            }
-        }
         _ => return None,
     })
 }
@@ -250,7 +246,7 @@ pub fn drain(hidden: bool) -> Vec<Action> {
     let events = std::mem::take(&mut *EVENTS.lock().unwrap_or_else(|p| p.into_inner()));
     let mut actions = Vec::new();
     for id in events {
-        if let Some(action) = action(&id, hidden) {
+        if let Some(action) = action(&id) {
             if hidden
                 && matches!(
                     action,
@@ -366,9 +362,9 @@ mod tests {
 
     #[test]
     fn menu_uses_the_apps_close_quit_and_edit_paths() {
-        assert!(matches!(action("close", false), Some(Action::CloseWindow)));
-        assert!(matches!(action("quit", true), Some(Action::Quit)));
-        assert!(matches!(action("show", true), Some(Action::ShowWindow)));
+        assert!(matches!(action("close"), Some(Action::CloseWindow)));
+        assert!(matches!(action("quit"), Some(Action::Quit)));
+        assert!(matches!(action("show-window"), Some(Action::ShowWindow)));
         assert!(matches!(edit_event("copy"), Some(egui::Event::Copy)));
         assert!(
             matches!(edit_event("redo"), Some(egui::Event::Key { key: egui::Key::Z, modifiers, .. }) if modifiers.command && modifiers.shift)

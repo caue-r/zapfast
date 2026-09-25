@@ -349,7 +349,7 @@ fn main() -> eframe::Result<()> {
                     break;
                 }
             }
-            zapfast::tray::idle(std::time::Duration::from_millis(150));
+            fastframe_tray::idle(std::time::Duration::from_millis(150));
         }
         let quit = slot
             .lock()
