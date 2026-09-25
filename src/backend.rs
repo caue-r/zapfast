@@ -4,7 +4,6 @@
 //! work. Commands and events cross channels, and events wake the UI.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -907,32 +906,8 @@ pub enum Unsent {
     Gif,
 }
 
-/// Cross-thread window wake handle.
-#[derive(Clone, Default)]
-pub struct Waker(Arc<std::sync::Mutex<Option<egui::Context>>>);
-
-impl Waker {
-    pub fn attach(&self, ctx: &egui::Context) {
-        *self.0.lock().unwrap_or_else(|p| p.into_inner()) = Some(ctx.clone());
-    }
-
-    pub fn detach(&self) {
-        *self.0.lock().unwrap_or_else(|p| p.into_inner()) = None;
-    }
-
-    pub fn wake(&self) {
-        if let Some(ctx) = self.0.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
-            ctx.request_repaint();
-        }
-    }
-
-    /// Schedules a delayed repaint.
-    pub fn wake_after(&self, delay: std::time::Duration) {
-        if let Some(ctx) = self.0.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
-            ctx.request_repaint_after(delay);
-        }
-    }
-}
+/// Cross-thread window wake handle: repaints whichever window exists.
+pub use fastframe_shell::Waker;
 
 /// UI handle to the backend runtime.
 pub struct Backend {

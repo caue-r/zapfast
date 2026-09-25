@@ -514,6 +514,46 @@ impl Pending {
     }
 }
 
+/// The app outlives its window: closing it with "keep running" on hides
+/// ZapFast, and the tray, a notification or another launch brings it back.
+impl fastframe_shell::Resident for App {
+    fn closed(&self) -> fastframe_shell::Closed {
+        if !self.quit_requested && self.hide_intent {
+            fastframe_shell::Closed::Hide
+        } else {
+            fastframe_shell::Closed::Quit
+        }
+    }
+
+    fn window_gone(&mut self) {
+        App::window_gone(self);
+    }
+
+    fn headless_frame(&mut self, ctx: &egui::Context) -> fastframe_shell::Headless {
+        self.background_frame(ctx);
+        if self.quit_requested {
+            fastframe_shell::Headless::Quit
+        } else if self.wants_show {
+            fastframe_shell::Headless::Show
+        } else {
+            fastframe_shell::Headless::Wait
+        }
+    }
+
+    /// Without a tray there is no way back to a hidden window, so show it.
+    fn start_hidden(&mut self) -> bool {
+        if !self.hides_to_tray() {
+            return false;
+        }
+        App::start_hidden(self);
+        true
+    }
+
+    fn shutdown(&mut self) {
+        App::shutdown(self);
+    }
+}
+
 const TRAY_SHOW: &str = "show";
 const TRAY_QUIT: &str = "quit";
 
@@ -5808,6 +5848,33 @@ mod tests {
         app.start_hidden();
         assert!(app.hide_intent);
         assert_eq!(started.try_recv(), Ok(()));
+    }
+
+    /// The shell asks the app what a closed window means and what each
+    /// headless tick wants; without a tray a hidden start opens the window.
+    #[test]
+    fn the_shell_hides_shows_and_quits_as_the_app_asks() {
+        use fastframe_shell::{Closed, Headless, Resident};
+        let mut app = app();
+        assert_eq!(app.closed(), Closed::Quit);
+        app.hide_intent = true;
+        assert_eq!(app.closed(), Closed::Hide);
+        app.quit_requested = true;
+        assert_eq!(app.closed(), Closed::Quit);
+        app.quit_requested = false;
+        Resident::window_gone(&mut app);
+        assert!(!app.hide_intent && !app.wants_show);
+        let ctx = egui::Context::default();
+        assert_eq!(app.headless_frame(&ctx), Headless::Wait);
+        app.wants_show = true;
+        assert_eq!(app.headless_frame(&ctx), Headless::Show);
+        app.quit_requested = true;
+        assert_eq!(app.headless_frame(&ctx), Headless::Quit);
+
+        let mut app = self::app();
+        assert!(app.tray.is_none());
+        assert!(!Resident::start_hidden(&mut app), "no tray, no way back");
+        assert!(!app.hide_intent);
     }
 
     #[test]

@@ -220,8 +220,9 @@ protocol. These notes are for coding agents and new contributors.
   (`fastsapp`, then `fastwhatsapp`) over once, so the linked device survives
   the rename. Migration runs after the single-instance guard and outside demos;
   keep the guard's `fastsapp:` wire identity compatible with running old copies.
-- The app outlives the window, as in Spotifast: `main` runs
-  `eframe::run_native` in a loop; closing the window with "keep running"
+- The app outlives the window, as in Spotifast: `main` hands the app to
+  `fastframe_shell::Shell`, which runs `eframe::run_native` in a loop through
+  App's `Resident` impl; closing the window with "keep running"
   on sets `hide_intent`, the window is destroyed, and a headless loop keeps
   calling `App::background_frame` (the link, the archive, the tray) until
   the tray, a clicked notification, or another launch sets `wants_show`,
