@@ -1843,6 +1843,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
+name = "fastframe-i18n"
+version = "0.1.0"
+source = "git+https://github.com/crmne/fastframe?rev=81e7d2d310052c360f0827957461da7e4ca80f7c#81e7d2d310052c360f0827957461da7e4ca80f7c"
+dependencies = [
+ "include-po",
+ "polib",
+ "sys-locale",
+ "tr",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7454,6 +7465,7 @@ dependencies = [
  "egui_extras",
  "emojis",
  "env_logger",
+ "fastframe-i18n",
  "getrandom 0.4.3",
  "hkdf",
  "hmac",
@@ -7461,7 +7473,6 @@ dependencies = [
  "icu_normalizer",
  "icu_properties",
  "image",
- "include-po",
  "jiff",
  "keyring-core",
  "ksni",
@@ -7481,7 +7492,6 @@ dependencies = [
  "openh264",
  "opus",
  "png 0.18.1",
- "polib",
  "qrcode",
  "rand 0.10.2",
  "raw-window-handle",
@@ -7495,12 +7505,10 @@ dependencies = [
  "serde_json",
  "sha2",
  "skrifa",
- "sys-locale",
  "tauri-winrt-notification",
  "tempfile",
  "tokio",
  "tokio-websockets",
- "tr",
  "tray-icon",
  "unicode-bidi",
  "unicode-segmentation",

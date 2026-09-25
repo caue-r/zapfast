@@ -588,8 +588,8 @@ English. `Ctrl+F` on the Settings page focuses the field, and `Esc` clears it.
 ### Interface language
 
 **Settings > Appearance > Language** chooses the interface language. **Auto**
-follows the operating system's language and falls back to English when ZapFast
-has no translation for it. Brazilian Portuguese, German, Spanish, Italian,
+follows the first of the operating system's preferred languages that ZapFast
+has a translation for, and falls back to English when it has none. Brazilian Portuguese, German, Spanish, Italian,
 French, and Russian cover the chat list, search, composer, shortcut hints,
 Settings, and dates. Translations are compiled from gettext PO
 files at build time, with no runtime parsing or network access. Message
