@@ -570,6 +570,16 @@ impl App {
         )
     }
 
+    /// Starts without a window (`--start-hidden`). The link and the archive
+    /// start now: they otherwise wait for a first frame, which a hidden start
+    /// only draws once the tray or another launch shows the window.
+    pub fn start_hidden(&mut self) {
+        self.hide_intent = true;
+        if let Some(startup) = self.backend.take_startup() {
+            let _ = startup.send(());
+        }
+    }
+
     fn with_backend(dirs: AppDirs, settings: Settings, backend: Backend, waker: Waker) -> Self {
         let palette = settings
             .cached_palette()
@@ -5709,6 +5719,22 @@ mod tests {
         assert_eq!(app.toasts.len(), 1);
         assert_eq!(app.toasts[0].message, "Failed to copy image");
         assert_eq!(app.toasts[0].kind, ToastKind::Error);
+    }
+
+    #[test]
+    fn a_hidden_start_starts_the_backend_without_a_frame() {
+        let root = tempfile::tempdir().unwrap();
+        let (backend, mut started) = Backend::detached_with_startup();
+        let mut app = App::with_backend(
+            AppDirs::under(root.path()),
+            Settings::default(),
+            backend,
+            Waker::default(),
+        );
+        assert!(started.try_recv().is_err(), "nothing starts before asked");
+        app.start_hidden();
+        assert!(app.hide_intent);
+        assert_eq!(started.try_recv(), Ok(()));
     }
 
     #[test]
