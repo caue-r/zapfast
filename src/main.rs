@@ -449,8 +449,14 @@ impl eframe::App for Shell {
             tour.drive(app, ctx);
         }
         app.background_frame(ctx);
-        #[cfg(target_os = "macos")]
-        zapfast::macos::update_window(frame, ctx, app.is_linked());
+        // The chat header is 60 points and zooms; the linking screen keeps
+        // AppKit's own 28-point strip.
+        let title_bar = if app.is_linked() {
+            zapfast::theme::TOP_BAR_HEIGHT
+        } else {
+            28.0 / ctx.zoom_factor()
+        };
+        fastframe_macos::align_traffic_lights(frame, ctx, title_bar);
         #[cfg(feature = "demo")]
         {
             // Keep requesting the configured screenshot size until it is applied.

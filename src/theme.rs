@@ -971,8 +971,12 @@ pub fn preview_macos(ctx: &egui::Context) {
 
 /// Horizontal clearance for native buttons; they do not scale with UI zoom.
 pub fn traffic_light_inset(ctx: &egui::Context) -> f32 {
-    if macos_chrome(ctx) && !ctx.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
-        84.0 / ctx.zoom_factor()
+    if cfg!(target_os = "macos") {
+        fastframe_macos::traffic_light_inset(ctx)
+    } else if macos_chrome(ctx) && !ctx.input(|input| input.viewport().fullscreen.unwrap_or(false))
+    {
+        // The demo's preview of the macOS layout on other platforms.
+        fastframe_macos::TRAFFIC_LIGHTS_WIDTH / ctx.zoom_factor()
     } else {
         0.0
     }
