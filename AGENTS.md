@@ -98,9 +98,10 @@ protocol. These notes are for coding agents and new contributors.
   helper after an explicit restart action. Keep package-manager detection, asset
   checksums, startup acknowledgement and rollback intact. Portable releases carry
   `packaging/zapfast-portable.txt`; the Windows installer has its own marker.
-- `src/theme/custom.rs` scans local JSON palettes off the UI thread, caching the
-  last usable choice in settings, with shared Spotifast palettes embedded as
-  defaults. On Linux filesystem notifications reload the catalog and the active
+- Custom themes come from fastframe-theme (`theme::Catalog`, ZapFast's
+  `fastframe_theme::Palette` impl in `src/theme.rs`): it scans local JSON
+  palettes off the UI thread, and the app caches the last usable choice in
+  settings, with the palettes shared with Spotifast embedded as defaults. On Linux filesystem notifications reload the catalog and the active
   Omarchy palette without a repaint timer; following Omarchy does not require
   packaged assets. Native packages ship optional hooks and templates, preserving
   existing per-user files. `reload-themes` uses the single-instance channel

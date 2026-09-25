@@ -166,7 +166,7 @@ pub struct App {
     last_settings_save: Instant,
     pub backend: Backend,
     pub palette: Palette,
-    pub custom_themes: theme::custom::Catalog,
+    pub custom_themes: theme::Catalog,
     applied_dark: Option<bool>,
     zoom_applied: bool,
 
@@ -535,7 +535,8 @@ impl App {
         let mut app = Self::with_backend(dirs, settings, backend, waker.clone());
         app.pauses_media = true;
         app.badge = Some(Default::default());
-        app.custom_themes.enable_desktop_themes();
+        app.custom_themes
+            .enable_desktop_themes(crate::theme::DESKTOP_THEMES);
         app.load_custom_themes();
         // Reading the desktop's font settings may wait on D-Bus; keep it off
         // the first frame.
@@ -606,7 +607,7 @@ impl App {
             last_settings_save: Instant::now(),
             backend,
             palette,
-            custom_themes: theme::custom::Catalog::default(),
+            custom_themes: theme::Catalog::default(),
             applied_dark: None,
             zoom_applied: false,
             link: LinkStatus::Starting,
@@ -3028,10 +3029,11 @@ impl App {
     }
 
     pub fn load_custom_themes(&mut self) {
+        let waker = self.waker.clone();
         self.custom_themes.start(
             self.dirs.config.join("themes"),
             self.settings.custom_theme.clone(),
-            &self.waker,
+            &fastframe_theme::Waker::new(move || waker.wake()),
         );
     }
 
@@ -3039,9 +3041,14 @@ impl App {
         if self.custom_themes.needs_reload() {
             self.load_custom_themes();
         }
-        if !self.custom_themes.poll() {
-            return;
+        if self.custom_themes.poll() {
+            self.cache_custom_themes();
         }
+    }
+
+    /// Keeps the selected and the desktop's palettes in settings, so the
+    /// last usable appearance survives a missing file or a slow scan.
+    fn cache_custom_themes(&mut self) {
         let mut changed = false;
         if let Some(filename) = &self.settings.custom_theme
             && let Some(theme) = self.custom_themes.find(filename)
@@ -6185,7 +6192,7 @@ mod tests {
 
     #[test]
     fn custom_theme_cache_survives_a_missing_file_and_follows_system_updates() {
-        use crate::theme::custom::{Catalog, CustomTheme};
+        use crate::theme::{Catalog, CustomTheme};
         let mut app = app();
         let ctx = egui::Context::default();
         let mut first = CustomTheme {
@@ -6193,7 +6200,7 @@ mod tests {
             palette: Palette::dark(),
         };
         first.palette.accent = egui::Color32::RED;
-        app.custom_themes = Catalog::from_themes(vec![first.clone()]);
+        app.custom_themes = Catalog::preview(vec![first.clone()], false);
         app.apply(Action::SetCustomTheme(first.filename.clone()), &ctx);
         assert_eq!(app.palette.accent, egui::Color32::RED);
         // Cached selection remains usable while the file is temporarily missing.
@@ -6207,14 +6214,9 @@ mod tests {
         let mut system = first;
         system.filename = "omarchy.json".into();
         system.palette.accent = egui::Color32::GREEN;
-        app.custom_themes
-            .load_system_test(Some(system.clone()), true);
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while app.settings.system_theme_cache.as_ref() != Some(&system) {
-            app.poll_custom_themes();
-            assert!(Instant::now() < deadline);
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        app.custom_themes = Catalog::preview(vec![system.clone()], true);
+        app.cache_custom_themes();
+        assert_eq!(app.settings.system_theme_cache.as_ref(), Some(&system));
         app.apply_theme(&ctx);
         assert_eq!(app.palette.accent, egui::Color32::GREEN);
         app.apply(Action::SetTheme(ThemeChoice::Light), &ctx);

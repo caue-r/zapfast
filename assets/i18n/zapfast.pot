@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: ZapFast\n"
 "Report-Msgid-Bugs-To: https://github.com/crmne/zapfast/issues/new?"
 "template=translation.yml\n"
-"POT-Creation-Date: 2026-09-25 14:39+0200\n"
+"POT-Creation-Date: 2026-09-25 14:45+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -162,7 +162,7 @@ msgstr ""
 msgid "No favorites yet"
 msgstr ""
 
-#: src/ui/chats.rs:772 src/app.rs:1222
+#: src/ui/chats.rs:772 src/app.rs:1223
 msgid "Message yourself"
 msgstr ""
 
@@ -821,52 +821,52 @@ msgstr[1] ""
 msgid "No one yet"
 msgstr ""
 
-#: src/app.rs:1143
+#: src/app.rs:1144
 #, rust-format
 msgid "A label named “{name}” already exists."
 msgstr ""
 
-#: src/app.rs:1203
+#: src/app.rs:1204
 #, rust-format
 msgid "{name} (You)"
 msgstr ""
 
-#: src/app.rs:1204 src/app.rs:1223
+#: src/app.rs:1205 src/app.rs:1224
 msgid "You"
 msgstr ""
 
-#: src/app.rs:2447
+#: src/app.rs:2448
 msgid "Not sent: ZapFast is not connected to WhatsApp."
 msgstr ""
 
-#: src/app.rs:2451
+#: src/app.rs:2452
 msgid ""
 "Not sent: the message you’re replying to isn’t available on this computer. "
 "Cancel the reply to send without a quote."
 msgstr ""
 
-#: src/app.rs:3763
+#: src/app.rs:3770
 msgid "Added to favorites"
 msgstr ""
 
-#: src/app.rs:3838
+#: src/app.rs:3845
 msgid "Sending the sticker pack…"
 msgstr ""
 
-#: src/app.rs:4123 src/ui/labels.rs:237
+#: src/app.rs:4130 src/ui/labels.rs:237
 #, rust-format
 msgid "You have {limit} labels, the most ZapFast keeps."
 msgstr ""
 
-#: src/app.rs:4646
+#: src/app.rs:4653
 msgid "This video opens in your system player"
 msgstr ""
 
-#: src/app.rs:5129
+#: src/app.rs:5136
 msgid "Copied image"
 msgstr ""
 
-#: src/app.rs:5132 src/app.rs:5137
+#: src/app.rs:5139 src/app.rs:5144
 msgid "Failed to copy image"
 msgstr ""
 

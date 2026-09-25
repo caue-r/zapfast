@@ -5,12 +5,52 @@
 
 use egui::{Color32, CornerRadius, Response, Sense, Stroke, Vec2};
 
-pub mod custom;
-#[cfg(target_os = "linux")]
-mod omarchy;
-pub(crate) mod presets;
-#[cfg(target_os = "linux")]
-mod watch;
+/// A local JSON palette, known by its filename in the themes directory.
+pub type CustomTheme = fastframe_theme::CustomTheme<Palette>;
+
+/// The palettes Settings offers: local files, the shared presets, and on
+/// Linux the live Omarchy palette.
+pub type Catalog = fastframe_theme::Catalog<Palette>;
+
+/// What a normal launch adds to the catalogue. Demos and tests leave it out
+/// and stay isolated from the desktop and its files.
+pub const DESKTOP_THEMES: fastframe_theme::DesktopThemes = fastframe_theme::DesktopThemes {
+    slug: "zapfast",
+    omarchy_template: include_str!("../contrib/omarchy/zapfast.json.tpl"),
+    presets: true,
+};
+
+/// The shared palettes, as ZapFast reads them.
+pub fn presets() -> impl Iterator<Item = CustomTheme> {
+    fastframe_theme::presets::themes::<Palette>()
+}
+
+/// What the theme setting says under it while the catalogue loads or when
+/// something went wrong.
+pub fn theme_status(status: fastframe_theme::Status) -> &'static str {
+    use fastframe_theme::{Problem, Status};
+    match status {
+        Status::Loading => "Loading local themes…",
+        Status::SelectedUnavailable => {
+            "The selected theme is unavailable. Keeping the last usable appearance. See the log for details."
+        }
+        Status::Problem(Problem::Unreadable) => {
+            "The themes folder could not be read. See the log for details."
+        }
+        Status::Problem(Problem::TooManyEntries) => {
+            "The themes folder has more than 512 entries. Keep fewer files there to list the custom palettes."
+        }
+        Status::Problem(Problem::TooManyThemes) => {
+            "Only 128 custom palettes can be listed. Keep fewer JSON files in the themes folder to see the rest."
+        }
+        Status::Problem(Problem::OmarchyUnreadable) => {
+            "The Omarchy palette could not be loaded. Keeping the last usable appearance. See the log for details."
+        }
+        Status::Problem(Problem::LoaderFailed | _) => {
+            "Custom themes could not be loaded. Run zapfast reload-themes to try again."
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Palette {
@@ -136,6 +176,69 @@ impl Palette {
             (0.45, 0.62)
         };
         hsl(hue, saturation, lightness)
+    }
+}
+
+impl fastframe_theme::Palette for Palette {
+    fn base(base: fastframe_theme::Base) -> Self {
+        match base {
+            fastframe_theme::Base::Dark => Self::dark(),
+            fastframe_theme::Base::Light => Self::light(),
+        }
+    }
+
+    fn set(&mut self, name: &str, color: Color32) -> bool {
+        match name {
+            "window" => self.window = color,
+            "panel" => self.panel = color,
+            "surface" => self.surface = color,
+            "surface_hover" => self.surface_hover = color,
+            "surface_active" => self.surface_active = color,
+            "outline" => self.outline = color,
+            "text" => self.text = color,
+            "secondary" => self.secondary = color,
+            "dim" => self.dim = color,
+            "accent" => self.accent = color,
+            "accent_hover" => self.accent_hover = color,
+            "on_accent" => self.on_accent = color,
+            "danger" => self.danger = color,
+            "warning" => self.warning = color,
+            "overlay" => self.overlay = color,
+            "shadow" => self.shadow = color,
+            "chat" => self.chat = color,
+            "bubble_in" => self.bubble_in = color,
+            "bubble_out" => self.bubble_out = color,
+            "link" => self.link = color,
+            "read" => self.read = color,
+            _ => return false,
+        }
+        true
+    }
+
+    /// Spotifast palettes share the sixteen interface colours. Derive the
+    /// chat-only colours when importing one, while keeping explicit ZapFast
+    /// overrides.
+    fn derive(&mut self, given: &std::collections::BTreeSet<&str>) {
+        if given.contains("window") && !given.contains("chat") {
+            self.chat = self.window;
+        }
+        if given.contains("surface") && !given.contains("bubble_in") {
+            self.bubble_in = self.surface;
+        }
+        if given.contains("accent") {
+            if !given.contains("bubble_out") {
+                self.bubble_out = self.surface.lerp_to_gamma(self.accent, 0.18);
+            }
+            if !given.contains("link") {
+                self.link = self.accent;
+            }
+            if !given.contains("read") {
+                self.read = self.accent;
+            }
+        }
+        if given.contains("panel") && !given.contains("overlay") {
+            self.overlay = self.panel;
+        }
     }
 }
 
@@ -966,7 +1069,7 @@ mod tests {
         let palettes = [("dark", Palette::dark()), ("light", Palette::light())]
             .into_iter()
             .map(|(name, palette)| (name.to_owned(), palette))
-            .chain(presets::themes().map(|theme| (theme.filename.clone(), theme.palette)));
+            .chain(presets().map(|theme| (theme.filename.clone(), theme.palette)));
         for (name, palette) in palettes {
             for own in [false, true] {
                 let fill = if own {
@@ -987,6 +1090,120 @@ mod tests {
                 assert_readable(&name, &[("read ticks", bubble.read, fill)], 3.0);
             }
         }
+    }
+
+    #[test]
+    fn spotifast_palettes_also_colour_the_conversation() {
+        let themes: Vec<_> = presets().collect();
+        assert_eq!(themes.len(), 8);
+        for theme in themes {
+            let palette = theme.palette;
+            assert_eq!(palette.chat, palette.window);
+            assert_eq!(palette.bubble_in, palette.surface);
+            assert_ne!(palette.bubble_out, palette.bubble_in);
+            assert_eq!(palette.link, palette.accent);
+            assert_eq!(
+                palette.dark,
+                !matches!(
+                    theme.filename.as_str(),
+                    "Catppuccin Latte.json" | "Rose Pine Dawn.json"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn rose_pine_dawn_hovered_primary_buttons_keep_readable_content() {
+        let palette = presets()
+            .find(|theme| theme.filename == "Rose Pine Dawn.json")
+            .unwrap()
+            .palette;
+        let ratio = contrast(palette.on_accent, palette.accent_hover);
+        assert!(ratio >= 4.5, "hover contrast is only {ratio:.2}:1");
+    }
+
+    /// Every colour ZapFast has can be set by name, including the chat
+    /// colours Spotifast's palettes lack; explicit ones win over derived ones.
+    #[test]
+    fn palette_files_set_every_colour_and_keep_explicit_chat_colours() {
+        let palette: Palette = fastframe_theme::parse_palette(
+            r##"{"base":"light","colors":{"window":"#101010","accent":"#203040","chat":"#010203","bubble_out":"#040506","shadow":"#00000080"}}"##,
+        )
+        .unwrap();
+        assert!(!palette.dark);
+        assert_eq!(palette.chat, Color32::from_rgb(1, 2, 3));
+        assert_eq!(palette.bubble_out, Color32::from_rgb(4, 5, 6));
+        assert_eq!(palette.link, Color32::from_rgb(0x20, 0x30, 0x40));
+        assert_eq!(palette.shadow, Color32::from_black_alpha(128));
+        assert_eq!(palette.panel, Palette::light().panel);
+        for name in [
+            "window",
+            "panel",
+            "surface",
+            "surface_hover",
+            "surface_active",
+            "outline",
+            "text",
+            "secondary",
+            "dim",
+            "accent",
+            "accent_hover",
+            "on_accent",
+            "danger",
+            "warning",
+            "overlay",
+            "shadow",
+            "chat",
+            "bubble_in",
+            "bubble_out",
+            "link",
+            "read",
+        ] {
+            let mut palette = Palette::dark();
+            assert!(
+                fastframe_theme::Palette::set(&mut palette, name, Color32::RED),
+                "{name}"
+            );
+        }
+        assert!(
+            fastframe_theme::parse_palette::<Palette>(r##"{"colors":{"typo":"#ffffff"}}"##)
+                .is_err()
+        );
+    }
+
+    /// ZapFast's Omarchy template adds the chat colours to the base ones and
+    /// renders as Omarchy's own renderer does.
+    #[test]
+    fn the_omarchy_template_renders_like_omarchy_in_light_and_dark_themes() {
+        const TEMPLATE: &str = include_str!("../contrib/omarchy/zapfast.json.tpl");
+        for (colors, expected) in [
+            (
+                include_str!("../tests/fixtures/omarchy/catppuccin.tsv"),
+                include_str!("../tests/fixtures/omarchy/catppuccin.json"),
+            ),
+            (
+                include_str!("../tests/fixtures/omarchy/catppuccin-latte.tsv"),
+                include_str!("../tests/fixtures/omarchy/catppuccin-latte.json"),
+            ),
+        ] {
+            let actual =
+                fastframe_theme::omarchy::render_seed::<Palette>(TEMPLATE, colors).unwrap();
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&actual).unwrap(),
+                serde_json::from_str::<serde_json::Value>(expected).unwrap()
+            );
+        }
+        assert_eq!(DESKTOP_THEMES.omarchy_template, TEMPLATE);
+    }
+
+    /// The hook packages install must be the one fastframe-theme describes.
+    /// A Windows checkout may turn its line endings into CRLF.
+    #[test]
+    fn the_shipped_omarchy_hook_has_not_drifted() {
+        assert_eq!(
+            include_str!("../contrib/omarchy/zapfast-theme").replace("\r\n", "\n"),
+            fastframe_theme::omarchy::hook_script("zapfast")
+        );
     }
 
     #[test]
