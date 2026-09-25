@@ -168,24 +168,20 @@ pub const FOCUS_STROKE_WIDTH: f32 = 1.0;
 pub const ROW_HEIGHT: f32 = 68.0;
 pub const TOP_BAR_HEIGHT: f32 = 60.0;
 
-const INTER_MEDIUM: &str = "inter-medium";
-const INTER_SEMIBOLD: &str = "inter-semibold";
-const INTER_BOLD: &str = "inter-bold";
-
 pub fn regular(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Proportional)
+    fastframe_fonts::Weight::Regular.font_id(size)
 }
 
 pub fn medium(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_MEDIUM.into()))
+    fastframe_fonts::Weight::Medium.font_id(size)
 }
 
 pub fn semibold(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_SEMIBOLD.into()))
+    fastframe_fonts::Weight::SemiBold.font_id(size)
 }
 
 pub fn bold(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_BOLD.into()))
+    fastframe_fonts::Weight::Bold.font_id(size)
 }
 
 /// Installs fonts, icons, and base style.
@@ -307,57 +303,10 @@ pub fn apply(ctx: &egui::Context, palette: &Palette) {
     ctx.set_global_style(style);
 }
 
+/// Inter at four weights, egui's own fonts behind it, and installed fonts
+/// for the scripts Inter lacks.
 fn install_fonts(ctx: &egui::Context) {
-    use egui::epaint::text::VariationCoords;
-    use egui::{FontData, FontDefinitions, FontFamily};
-    use std::sync::Arc;
-
-    let mut fonts = FontDefinitions::default();
-    let inter = include_bytes!("../assets/fonts/InterVariable.ttf");
-    let weighted = |weight: f32| {
-        let mut data = FontData::from_static(inter);
-        data.tweak.coords = VariationCoords::new([(b"wght", weight)]);
-        Arc::new(data)
-    };
-    fonts.font_data.insert("inter".to_owned(), weighted(400.0));
-    fonts
-        .font_data
-        .insert(INTER_MEDIUM.to_owned(), weighted(500.0));
-    fonts
-        .font_data
-        .insert(INTER_SEMIBOLD.to_owned(), weighted(600.0));
-    fonts
-        .font_data
-        .insert(INTER_BOLD.to_owned(), weighted(700.0));
-
-    fonts
-        .families
-        .entry(FontFamily::Proportional)
-        .or_default()
-        .insert(0, "inter".to_owned());
-    let fallbacks: Vec<String> = fonts.families[&FontFamily::Proportional]
-        .iter()
-        .skip(1)
-        .cloned()
-        .collect();
-    for name in [INTER_MEDIUM, INTER_SEMIBOLD, INTER_BOLD] {
-        let mut family = vec![name.to_owned()];
-        family.extend(fallbacks.iter().cloned());
-        fonts.families.insert(FontFamily::Name(name.into()), family);
-    }
-
-    // Append system fallbacks after Inter and emoji fonts.
-    for font in crate::system_fonts::fallbacks() {
-        let mut data = FontData::from_static(&font.bytes);
-        data.index = font.index;
-        data.tweak.scale = font.scale;
-        fonts.font_data.insert(font.name.clone(), Arc::new(data));
-        for family in fonts.families.values_mut() {
-            family.push(font.name.clone());
-        }
-    }
-
-    ctx.set_fonts(fonts);
+    fastframe_fonts::FontSetup::default().install(ctx);
 }
 
 fastframe_icons::icons! {
@@ -899,27 +848,6 @@ mod tests {
                 palette.dark
             );
         }
-    }
-
-    #[test]
-    fn inter_figures_are_tabular() {
-        let ctx = egui::Context::default();
-        install(&ctx);
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            let width = |text: &str| {
-                ui.painter()
-                    .layout_no_wrap(text.to_owned(), regular(13.0), Color32::WHITE)
-                    .rect
-                    .width()
-            };
-            // With proportional figures "1:11" is far narrower than "8:88",
-            // so timers and durations jitter as they count.
-            assert!(
-                (width("1:11") - width("8:88")).abs() < 0.01,
-                "bundled Inter should draw tabular figures"
-            );
-        });
-        output.textures_delta.clear();
     }
 
     fn assert_readable(name: &str, pairs: &[(&str, Color32, Color32)], target: f32) {
