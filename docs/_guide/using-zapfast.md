@@ -302,7 +302,7 @@ everything, and it resets when ZapFast restarts.
 
 When you have archived chats, an **Archived** row sits above the first chat and
 opens them, with the number of archived chats that have unread messages. The
-arrow beside the title brings you back.
+arrow beside the title, or Escape, brings you back.
 
 Right-click a chat to pin, favorite, archive, mark as unread, or mute it for
 eight hours, one week, or indefinitely. These changes also apply on your

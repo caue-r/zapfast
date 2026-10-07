@@ -164,6 +164,8 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
             actions.push(Action::CloseChat);
         } else if app.locked_folder {
             actions.push(Action::CloseLockedFolder);
+        } else if app.show_archived {
+            actions.push(Action::ShowArchived(false));
         }
     }
     // Enter sends a recording because the text field is hidden.
@@ -549,6 +551,29 @@ mod tests {
         assert!(matches!(
             app.actions.as_slice(),
             [Action::Open(Page::Chats)]
+        ));
+    }
+
+    #[test]
+    fn escape_closes_the_chat_then_leaves_the_archive() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = App::headless(
+            crate::paths::AppDirs::under(root.path()),
+            crate::settings::Settings::default(),
+        )
+        .0;
+        app.page = Page::Chats;
+        app.show_archived = true;
+        app.open_chat = Some("fixture".into());
+        let ctx = egui::Context::default();
+        escape(&mut app, &ctx);
+        assert!(matches!(app.actions.as_slice(), [Action::CloseChat]));
+        app.actions.clear();
+        app.open_chat = None;
+        escape(&mut app, &ctx);
+        assert!(matches!(
+            app.actions.as_slice(),
+            [Action::ShowArchived(false)]
         ));
     }
 
