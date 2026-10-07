@@ -28,11 +28,12 @@ pub enum Stop {
     Favorites,
     Groups,
     Channels,
-    Archived,
     Locked,
     /// One chip in the label row, by its position among the labels.
     Label(u8),
     ManageLabels,
+    /// The Archived row above the first chat.
+    Archived,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -7373,6 +7373,40 @@ mod tests {
     }
 
     #[test]
+    fn the_archived_row_sits_above_the_first_chat_and_opens_the_archive() {
+        let mut app = app();
+        assert!(app.archived_count() > 0, "the sample has an archived chat");
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        render(&mut app, &ctx);
+        let archived = ctx
+            .data(|data| data.get_temp::<egui::Rect>(crate::ui::chats::archived_row_id()))
+            .expect("the Archived row is on screen");
+        let first = app.visible_chats()[0].id.clone();
+        let first = ctx
+            .data(|data| data.get_temp::<egui::Rect>(crate::ui::chats::chat_row_id(&first)))
+            .expect("the first chat is on screen");
+        assert!(archived.bottom() <= first.top() + 0.5);
+        let pos = archived.center();
+        let press = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerMoved(pos), press(true)],
+        );
+        frame_with(&mut app, &ctx, vec![press(false)]);
+        render(&mut app, &ctx);
+        assert!(app.show_archived);
+        assert!(app.visible_chats().iter().all(|chat| chat.archived));
+    }
+
+    #[test]
     fn a_chat_clicked_in_the_unread_list_stays_there_once_read() {
         use crate::model::ChatFilter;
         let mut app = app();
@@ -10596,8 +10630,8 @@ mod tests {
                 Stop::Favorites,
                 Stop::Groups,
                 Stop::Channels,
-                Stop::Archived,
                 Stop::Locked,
+                Stop::Archived,
             ]
             .into_iter()
             .filter(|stop| {

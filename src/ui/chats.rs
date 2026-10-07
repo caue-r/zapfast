@@ -449,23 +449,6 @@ fn filter_chips(app: &mut App, ui: &mut egui::Ui) {
                         app.actions.push(Action::SetChatFilter(next));
                     }
                 }
-                if app.archived_count() > 0 || app.show_archived {
-                    let selected = app.show_archived;
-                    let chip = widgets::filter_chip(
-                        ui,
-                        &palette,
-                        crate::i18n::gettext(app.locale, "Archived").as_ref(),
-                        app.archived_unread(),
-                        selected,
-                    )
-                    .tab_stop(Stop::Archived);
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("archived-chip"), chip.rect);
-                    });
-                    if chip.clicked() {
-                        app.actions.push(Action::ShowArchived(!selected));
-                    }
-                }
                 if app.locked_count() > 0 || app.locked_folder_open() {
                     let selected = app.locked_folder_open();
                     let chip = widgets::filter_chip(
@@ -517,7 +500,12 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     let chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
+    // Archived chats open from a row above the first chat, as on the phone.
+    let lead = usize::from(!app.show_archived && app.archived_count() > 0);
     if chats.is_empty() {
+        if lead > 0 {
+            archived_entry(app, ui);
+        }
         // The favorites title is translated, so it is bound here: the tuple
         // below borrows it for this frame, and every other arm stays a literal.
         let favorites_title;
@@ -549,7 +537,7 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
     // Rows touch: one clickable surface from top to bottom, no gaps or rules.
     ui.spacing_mut().item_spacing.y = 0.0;
     let row_height = theme::ROW_HEIGHT;
-    let total = chats.len();
+    let total = chats.len() + lead;
     let mut scroll_area = egui::ScrollArea::vertical()
         .id_salt("chat-list")
         .auto_shrink([false, false]);
@@ -559,7 +547,8 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
     let target_row = app
         .scroll_chat_into_view
         .as_ref()
-        .and_then(|target| chats.iter().position(|chat| chat.id == *target));
+        .and_then(|target| chats.iter().position(|chat| chat.id == *target))
+        .map(|row| row + lead);
     // The copies a narrow window's slide draws have widget ids of their own:
     // they show the real list's offset instead of keeping one.
     let copy = ui
@@ -605,7 +594,11 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
             );
         }
         for index in range {
-            let chat = &chats[index];
+            if index < lead {
+                archived_entry(app, ui);
+                continue;
+            }
+            let chat = &chats[index - lead];
             // Key by chat so an open menu survives list reordering.
             let response = ui
                 .push_id(("chat", &chat.id), |ui| row(app, ui, chat))
@@ -647,6 +640,57 @@ fn shared_offset_id() -> egui::Id {
 #[cfg(test)]
 pub(crate) fn list_offset_id() -> egui::Id {
     egui::Id::new("chat-list-offset")
+}
+
+/// The row above the first chat that opens the archived chats, with how
+/// many of them have unread messages.
+fn archived_entry(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let unread = app.archived_unread();
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(ui.available_width(), theme::ROW_HEIGHT),
+        Sense::click(),
+    );
+    let response = response.tab_stop(Stop::Archived);
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(archived_row_id(), rect));
+    if ui.is_rect_visible(rect) {
+        if response.hovered() || response.has_focus() {
+            widgets::row_highlight(ui, &palette, rect, palette.surface_hover);
+        }
+        let icon_rect =
+            Rect::from_center_size(pos2(rect.left() + 38.0, rect.center().y), Vec2::splat(22.0));
+        Icon::Archive
+            .image(palette.accent, 22.0)
+            .paint_at(ui, icon_rect);
+        ui.painter().text(
+            pos2(rect.left() + 76.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            crate::i18n::gettext(app.locale, "Archived"),
+            theme::medium(14.5),
+            palette.text,
+        );
+        if unread > 0 {
+            ui.painter().text(
+                pos2(rect.right() - 16.0, rect.center().y),
+                egui::Align2::RIGHT_CENTER,
+                unread.to_string(),
+                theme::regular(12.5),
+                palette.accent,
+            );
+        }
+    }
+    if response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        app.actions.push(Action::ShowArchived(true));
+    }
+}
+
+/// Where the Archived row was laid out, for interaction tests.
+pub(crate) fn archived_row_id() -> egui::Id {
+    egui::Id::new("archived-row")
 }
 
 /// The row the secret code reveals: the only thing the search then shows.
