@@ -2287,7 +2287,7 @@ impl App {
         contacts
     }
 
-    /// Archived chats with unread messages, for the Archived chip.
+    /// Archived chats with unread messages, for the Archived row.
     pub fn archived_unread(&self) -> usize {
         self.chats
             .iter()
