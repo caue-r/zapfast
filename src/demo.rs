@@ -10690,7 +10690,7 @@ mod tests {
             assert!(ctx.read_response(row).unwrap().sense.is_focusable());
             for (modifiers, expected_stop) in [
                 (egui::Modifiers::NONE, Stop::Composer),
-                (egui::Modifiers::SHIFT, Stop::Locked),
+                (egui::Modifiers::SHIFT, Stop::Archived),
             ] {
                 ctx.memory_mut(|memory| memory.request_focus(row));
                 frame_sized(&mut app, &ctx, 780.0, vec![key(egui::Key::Tab, modifiers)]);
